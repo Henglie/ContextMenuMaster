@@ -1,0 +1,19 @@
+# 默认按文本处理，检出时用平台原生行尾，提交时归一为 LF。
+* text=auto
+
+# 源码与文本：仓库内统一 LF。
+*.cpp   text eol=lf
+*.h     text eol=lf
+*.html  text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+
+# Windows 批处理必须 CRLF，否则 chcp/cd 串行会出错。
+*.bat   text eol=crlf
+
+# 二进制：不做行尾转换。
+*.ico   binary
+*.png   binary
+*.lib   binary

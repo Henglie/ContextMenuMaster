@@ -1,0 +1,44 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 20, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "windows-debug",
+      "displayName": "Windows Debug (MSVC)",
+      "description": "用 VS 的 MSVC 编译器，Debug 版，输出到 build/debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/debug",
+      "architecture": { "value": "x64", "strategy": "external" },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-release",
+      "displayName": "Windows Release (MSVC)",
+      "description": "发布版，开优化+链接瘦身，输出到 build/release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release",
+      "architecture": { "value": "x64", "strategy": "external" },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-release-x86",
+      "displayName": "Windows Release 32位 (MSVC x86)",
+      "description": "32 位发布版（需在 vcvars32 / x86 工具链环境下配置）",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release-x86",
+      "architecture": { "value": "x86", "strategy": "external" },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "windows-debug" },
+    { "name": "release", "configurePreset": "windows-release" },
+    { "name": "release-x86", "configurePreset": "windows-release-x86" }
+  ]
+}

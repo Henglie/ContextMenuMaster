@@ -1,0 +1,2012 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-preview-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Context Menu Master</title>
+<script src="./vue.global.js"></script>
+<style>
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  /* ============================================================
+     令牌层对齐 FairyGlass。**UI 外壳固定暗色玻璃**，不做昼夜切换。
+     昼夜切换只作用于预览的那张右键菜单（.ctx-menu / .ctx-menu-classic），
+     通过 html[data-preview-theme="light"] 切换预览菜单的配色变量。
+     作者的玻璃 UI 是深浅一体化设计，不该跟着系统明暗变。
+     Glass UI shell is always dark. Theme switch only flips the preview
+     menu via html[data-preview-theme="light"].
+     ============================================================ */
+  :root{
+    --font-sans:-apple-system,"Segoe UI Variable","Segoe UI","SF Pro Display","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    --font-mono:"SF Mono","JetBrains Mono","Cascadia Code","Consolas","Microsoft YaHei",monospace;
+    /* —— 暗色（默认）—— Dark (default) —— */
+    --bg-0:#070b14; --bg-1:#0b1120;
+    --glow-a:56,132,255; --glow-b:38,198,218; --glow-c:30,86,180;
+    --fg:#eaf0fb; --fg-muted:#93a1bd; --fg-dim:#5d6b87;
+    --accent:#4d9fff; --accent-bright:#7cc0ff; --accent-soft:rgba(77,159,255,.14);
+    --ok:#6ee7b7; --ok-soft:rgba(16,185,129,.15);
+    --warn:#ffcf70;
+    --danger:#ff9a9a; --danger-soft:rgba(239,68,68,.15);
+    --glass-fill:rgba(255,255,255,.05);
+    --glass-fill-strong:rgba(255,255,255,.09);
+    --glass-blur:10px; --glass-saturate:180%;
+    --glass-backdrop:blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    --glass-stroke:rgba(255,255,255,.16);
+    --glass-highlight:rgba(255,255,255,.5);
+    --shadow-glass:0 8px 32px rgba(0,0,0,.45),0 2px 8px rgba(0,0,0,.3);
+    --inset-glass:inset 0 1px 0 rgba(255,255,255,.18),inset 0 0 0 .5px rgba(255,255,255,.06);
+    --glow-field:
+      radial-gradient(38% 46% at 22% 26%, rgba(var(--glow-a),.30), transparent 70%),
+      radial-gradient(42% 50% at 78% 32%, rgba(var(--glow-b),.20), transparent 70%),
+      radial-gradient(46% 54% at 60% 50%, rgba(var(--glow-c),.18), transparent 72%),
+      radial-gradient(50% 58% at 40% 88%, rgba(var(--glow-a),.16), transparent 72%);
+    /* Win11 真实右键菜单玻璃（暗）：Mica/Acrylic 调。
+       Win11 real context-menu glass (dark): Mica/Acrylic tone. */
+    --ctx-bg:linear-gradient(180deg,rgba(40,46,62,.94),rgba(28,34,50,.96));
+    --ctx-fg:#f3f4f8;
+    --ctx-stroke:rgba(255,255,255,.10);
+    --ctx-hover:rgba(255,255,255,.07);
+    --ctx-sep:rgba(255,255,255,.10);
+    --ctx-shortcut:#9da2ad;
+    --radius-sm:8px; --radius:16px; --radius-pill:999px;
+    --dur-fast:.13s; --dur-quick:.18s; --dur-base:.26s; --dur-enter:.36s;
+    --spring:cubic-bezier(.16,1,.3,1);
+    --ease-snap:cubic-bezier(.4,0,.2,1);
+  }
+  /* —— 预览菜单浅色覆盖：只切换预览的那张右键菜单的配色变量。
+       UI 外壳（玻璃令牌）固定暗色，不在此处覆盖。 —— */
+  /* Preview-only light overlay: flips only the ctx-* vars used by
+     .ctx-menu / .ctx-menu-classic. The glass UI shell stays dark. */
+  html[data-preview-theme="light"]{
+    --ctx-bg:linear-gradient(180deg,rgba(252,253,255,.97),rgba(244,247,253,.97));
+    --ctx-fg:#1c1f24;
+    --ctx-stroke:rgba(20,40,90,.10);
+    --ctx-hover:rgba(20,40,90,.06);
+    --ctx-sep:rgba(20,40,90,.10);
+    --ctx-shortcut:#6b7280;
+  }
+  html,body{ height:100%; }
+  body{
+    font-family:var(--font-sans); color:var(--fg); height:100vh; overflow:hidden;
+    background:var(--bg-1); -webkit-font-smoothing:antialiased;
+    transition:background var(--dur-base) var(--ease-snap), color var(--dur-base) var(--ease-snap);
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:-1;
+    background:var(--glow-field); background-color:var(--bg-0); pointer-events:none;
+    transition:background-color var(--dur-base) var(--ease-snap);
+  }
+  #app{ display:flex; height:100vh; overflow:hidden; gap:14px; padding:14px; }
+
+  /* 玻璃基座 / Glass base */
+  .glass{
+    background:linear-gradient(rgba(255,255,255,.04),rgba(255,255,255,.04)),var(--glass-fill);
+    -webkit-backdrop-filter:var(--glass-backdrop); backdrop-filter:var(--glass-backdrop);
+    border:1px solid var(--glass-stroke);
+    box-shadow:var(--shadow-glass),var(--inset-glass);
+    border-radius:var(--radius);
+  }
+
+  /* ---- 侧栏 / Sidebar ---- */
+  .side{ width:200px; flex-shrink:0; display:flex; flex-direction:column; padding:16px 12px; }
+  .brand{ font-size:16px; font-weight:700; padding:6px 10px 2px; letter-spacing:.3px;
+    background:linear-gradient(180deg,var(--fg),var(--accent-bright));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .brand .en{ display:block; font-size:11px; color:var(--fg-dim); font-weight:400;
+    margin-top:3px; letter-spacing:1px; -webkit-text-fill-color:var(--fg-dim); }
+  .nav{ margin-top:18px; display:flex; flex-direction:column; gap:4px; flex:1; }
+  .nav-item{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--radius-sm);
+    color:var(--fg-muted); cursor:pointer; font-size:13.5px; font-weight:500;
+    transition:background var(--dur-quick) var(--ease-snap), color var(--dur-quick) var(--ease-snap);
+    border:1px solid transparent;
+  }
+  .nav-item:hover{ background:var(--glass-fill-strong); color:var(--fg); }
+  .nav-item.on{ background:var(--accent-soft); color:var(--fg); border-color:rgba(var(--glow-a),.32); }
+  .nav-item .ic{ width:14px; text-align:center; font-size:11px; opacity:.85; }
+  .foot{ font-size:11px; color:var(--fg-dim); padding:8px 10px 2px; line-height:1.6; }
+
+  /* ---- 主区 / Main ---- */
+  .main{ flex:1; display:flex; flex-direction:column; overflow:hidden; gap:14px; min-width:0; }
+  .header{ display:flex; align-items:center; gap:12px; padding:14px 18px; flex-shrink:0; }
+  .header .title{ font-size:17px; font-weight:650; }
+  .header .spacer{ flex:1; }
+
+  /* 顶栏圆形按钮（主题/语言）/ Round header buttons */
+  .icon-pill{ display:inline-flex; align-items:center; gap:7px; padding:7px 12px; border-radius:var(--radius-pill);
+    background:var(--glass-fill); border:1px solid var(--glass-stroke); color:var(--fg-muted);
+    cursor:pointer; font-size:12.5px; transition:color var(--dur-quick), background var(--dur-quick), border-color var(--dur-quick); }
+  .icon-pill:hover{ color:var(--fg); background:var(--glass-fill-strong); border-color:rgba(var(--glow-a),.32); }
+  .icon-pill .arrow{ font-size:9px; transition:transform var(--dur-quick) var(--ease-snap); }
+  .icon-pill.open .arrow{ transform:rotate(180deg); }
+
+  .popover{ position:absolute; top:calc(100% + 6px); right:0; min-width:150px; padding:5px;
+    border-radius:var(--radius-sm); z-index:30; display:flex; flex-direction:column; gap:2px;
+    /* .glass 基座背景太淡，深底上弹层看不清。这里盖一层更实的底色 + 加重模糊/描边/阴影，
+       保证主题切换、语言切换弹层在任何背景上都清晰可读。
+       The .glass base is too faint on a dark backdrop; layer an opaque-ish fill
+       over it so popovers stay legible. */
+    background:linear-gradient(rgba(13,19,34,.86),rgba(13,19,34,.86)),
+               linear-gradient(rgba(255,255,255,.06),rgba(255,255,255,.06));
+    -webkit-backdrop-filter:blur(20px) saturate(180%); backdrop-filter:blur(20px) saturate(180%);
+    border:1px solid var(--glass-stroke);
+    box-shadow:0 12px 32px rgba(0,0,0,.55),var(--inset-glass); }
+  .popover .opt{ padding:8px 11px; border-radius:7px; font-size:12.5px; color:var(--fg-muted); cursor:pointer;
+    display:flex; align-items:center; gap:8px;
+    transition:background var(--dur-quick), color var(--dur-quick); }
+  .popover .opt:hover{ background:var(--glass-fill-strong); color:var(--fg); }
+  .popover .opt.on{ color:var(--accent-bright); background:var(--accent-soft); }
+  .popover .opt .glyph{ width:14px; font-size:11px; opacity:.8; }
+  .popover .pop-title{ padding:6px 11px 4px; font-size:10px; color:var(--fg-dim);
+    letter-spacing:.4px; text-transform:uppercase; }
+
+  .theme-wrap, .lang-wrap{ position:relative; }
+
+  /* 滚动内容区 / Scrollable content */
+  .content{ flex:1; overflow-y:auto; padding:4px 18px 18px; }
+  .content::-webkit-scrollbar{ width:9px; }
+  .content::-webkit-scrollbar-thumb{ background:var(--glass-stroke); border-radius:var(--radius-pill);
+    border:2px solid transparent; background-clip:content-box; }
+
+  /* 场景 Tab 横条 / Scene tab strip */
+  .scene-bar{ display:flex; gap:6px; padding:6px; border-radius:var(--radius-pill);
+    background:var(--glass-fill); border:1px solid var(--glass-stroke);
+    margin:4px 0 14px; overflow-x:auto; }
+  .scene-bar::-webkit-scrollbar{ display:none; }
+  .scene-tab{ padding:8px 16px; border-radius:var(--radius-pill); cursor:pointer;
+    font-size:12.5px; color:var(--fg-muted); white-space:nowrap;
+    display:inline-flex; align-items:center; gap:7px;
+    transition:background var(--dur-quick), color var(--dur-quick); }
+  .scene-tab:hover{ color:var(--fg); background:var(--glass-fill-strong); }
+  .scene-tab.on{ background:linear-gradient(120deg,rgba(var(--glow-a),.28),var(--accent-soft));
+    color:var(--fg); box-shadow:0 0 0 1px rgba(var(--glow-a),.35) inset; }
+  .scene-tab .count{ font-size:10.5px; color:var(--fg-dim); font-family:var(--font-mono); }
+  .scene-tab.on .count{ color:var(--accent-bright); }
+
+  .slogan{ font-size:12.5px; color:var(--fg-muted); margin-bottom:14px; line-height:1.7; }
+
+  /* 通用按钮 / Buttons */
+  .btn{ display:inline-flex; align-items:center; gap:7px; padding:9px 16px; border-radius:var(--radius-sm);
+    background:var(--glass-fill); border:1px solid var(--glass-stroke); color:var(--fg);
+    cursor:pointer; font-size:13px; font-weight:500; font-family:inherit;
+    transition:transform var(--dur-fast) var(--spring), background var(--dur-quick), border-color var(--dur-quick); }
+  .btn:hover{ background:var(--glass-fill-strong); border-color:rgba(var(--glow-a),.4); }
+  .btn:active{ transform:scale(.97); }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn.primary{ background:linear-gradient(120deg,rgba(77,159,255,.24),var(--accent-soft));
+    border-color:rgba(var(--glow-a),.45); }
+  .btn.sm{ padding:6px 11px; font-size:12px; }
+  .btn.danger{ color:var(--danger); border-color:rgba(239,68,68,.30); }
+  .btn .ic{ font-size:12px; }
+
+  /* 卡片 / Cards */
+  .card{ padding:18px; margin-bottom:14px; }
+  .card-title{ font-size:14px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+  .card-desc{ font-size:12px; color:var(--fg-muted); line-height:1.65; margin-bottom:14px; }
+  .cat-title{ font-size:11.5px; color:var(--fg-dim); font-weight:600; letter-spacing:.5px; text-transform:uppercase;
+    display:flex; align-items:center; gap:10px; margin:6px 2px 12px; }
+  .cat-title::after{ content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--glass-stroke),transparent); }
+
+  /* 关于页：作者与版本信息表 / About: author & version grid */
+  .info-grid{ display:grid; grid-template-columns:auto 1fr; gap:9px 18px; font-size:12.5px; align-items:baseline; }
+  .info-grid .k{ color:var(--fg-dim); white-space:nowrap; }
+  .info-grid .v{ color:var(--fg); word-break:break-all; }
+  .repo-link{ color:var(--accent-bright); text-decoration:none; border-bottom:1px solid transparent;
+    transition:border-color var(--dur-quick); cursor:pointer; }
+  .repo-link:hover{ border-bottom-color:var(--accent-bright); }
+
+  /* 状态徽章 / Status badge */
+  .badge{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:var(--radius-pill);
+    font-size:11.5px; font-weight:600; }
+  .badge.classic{ background:var(--ok-soft); color:var(--ok); }
+  .badge.modern{ background:var(--accent-soft); color:var(--accent-bright); }
+  .badge .dot{ width:7px; height:7px; border-radius:50%; background:currentColor; }
+
+  /* ============================================================
+     视图切换分段控件（WYSIWYG / 列表）
+     View segment control (WYSIWYG / List)
+     ============================================================ */
+  .view-seg{ display:inline-flex; border:1px solid var(--glass-stroke); border-radius:var(--radius-sm);
+    overflow:hidden; background:var(--glass-fill); }
+  .view-seg button{ padding:8px 16px; background:transparent; border:none; color:var(--fg-muted);
+    cursor:pointer; font-size:12.5px; font-weight:500; font-family:inherit;
+    transition:background var(--dur-quick), color var(--dur-quick); }
+  .view-seg button.on{ background:var(--accent-soft); color:var(--fg); }
+  .view-seg button:hover:not(.on){ color:var(--fg); }
+
+  .toolbar{ display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .toolbar .spacer{ flex:1; }
+
+  /* ============================================================
+     可视化舞台：并排呈现 Win11 新菜单 →（显示更多选项）→ 经典菜单。
+     体现真实层级：新菜单是顶层，点"显示更多选项"才展开右边的经典菜单。
+     Visual stage: Win11 new menu and the classic menu it expands into,
+     side by side, with a connector arrow between them.
+     ============================================================ */
+  .visual-stage{ display:flex; align-items:flex-start; justify-content:center;
+    gap:8px; flex-wrap:wrap; padding:20px 16px 26px;
+    background:
+      repeating-linear-gradient(45deg, transparent 0 16px, var(--glass-fill) 16px 17px);
+    border-radius:var(--radius); border:1px dashed var(--glass-stroke);
+    margin-bottom:10px; }
+  .visual-col{ display:flex; flex-direction:column; align-items:center; gap:10px; }
+  /* 列顶部小标题：圆点 + 文字，标明这一栏是哪种菜单 */
+  .visual-cap{ display:inline-flex; align-items:center; gap:7px; font-size:11.5px;
+    color:var(--fg-muted); font-weight:600; letter-spacing:.3px; }
+  .visual-cap .vc-dot{ width:8px; height:8px; border-radius:50%; }
+  .visual-cap .vc-dot.modern{ background:var(--accent-bright);
+    box-shadow:0 0 6px rgba(var(--glow-a),.7); }
+  .visual-cap .vc-dot.classic{ background:var(--ok);
+    box-shadow:0 0 6px rgba(110,231,183,.6); }
+  /* 现代菜单只读小标：与系统管控不可写呼应 */
+  .visual-cap .vc-lock{ font-size:10px; font-weight:500; color:var(--fg-dim);
+    border:1px solid var(--glass-stroke); border-radius:var(--radius-pill);
+    padding:1px 8px; letter-spacing:.2px; cursor:help; }
+  /* 中间连接区：箭头 + "展开为"文字，竖直居中对齐到菜单高度 */
+  .visual-link{ display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:6px; align-self:center; padding:0 4px;
+    min-width:54px; color:var(--fg-dim); }
+  .visual-link .vl-arrow{ font-size:20px; color:var(--accent); opacity:.85; }
+  .visual-link .vl-text{ font-size:10.5px; line-height:1.3; text-align:center;
+    color:var(--fg-dim); }
+  /* "显示更多选项"行高亮：它是通往经典菜单的入口 */
+  .ctx-more-row{ cursor:default; }
+  .ctx-more-row .chev{ color:var(--accent); }
+  /* 并排两菜单下方的统一提示行 */
+  .visual-hint{ flex-basis:100%; font-size:11px; color:var(--fg-dim);
+    margin-top:6px; text-align:center; }
+  /* 窄屏（窗口拉窄）时连接箭头转向下，两菜单纵向堆叠。
+     保持 column：箭头在上转 90° 朝下，「展开为」文字落在箭头正下方。*/
+  @media (max-width: 760px){
+    .visual-link{ min-width:0; padding:6px 0; }
+    .visual-link .vl-arrow{ transform:rotate(90deg); }
+  }
+  /* Win11 右键菜单本体 —— 对齐真实系统菜单：宽度随最长行自适应（max-content），
+     有一个贴近系统的最小宽度，超长才截断；圆角 8px、Mica 半透明、
+     字体 Segoe UI Variable Text、内边距 8px 4px、外阴影柔和。
+     之前写死 width:280px 看起来太宽、不像系统；改为内容自适应 + min/max 边界。*/
+  .ctx-menu{ width:max-content; min-width:180px; max-width:340px;
+    padding:8px 4px; border-radius:8px;
+    background:var(--ctx-bg); color:var(--ctx-fg);
+    font-family:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",
+                 "Microsoft YaHei",system-ui,sans-serif;
+    -webkit-backdrop-filter:blur(30px) saturate(180%); backdrop-filter:blur(30px) saturate(180%);
+    border:1px solid var(--ctx-stroke);
+    box-shadow:0 12px 28px rgba(0,0,0,.42), 0 0 0 .5px rgba(255,255,255,.06) inset; }
+  html[data-preview-theme="light"] .ctx-menu{
+    box-shadow:0 12px 28px rgba(20,40,90,.18), 0 0 0 .5px rgba(255,255,255,.5) inset; }
+  /* Win11 顶部短工具条：剪切/复制/重命名/分享/删除（仅 file/folder/drive 场景显示） */
+  .ctx-toolbar{ display:flex; gap:2px; padding:2px 4px 4px; margin-bottom:2px; }
+  .ctx-tool{ flex:1; height:36px; display:flex; align-items:center; justify-content:center;
+    border-radius:6px; cursor:default; color:var(--ctx-fg);
+    transition:background var(--dur-fast) var(--ease-snap); }
+  .ctx-tool:hover{ background:var(--ctx-hover); }
+  .ctx-tool .gi{ font-size:15px; opacity:.9; }
+  /* 一行菜单项：左 28 图标 / 中标签 / 右快捷键或 ▸ —— 行高 32、左右内边距 8/4。*/
+  .ctx-row{ display:grid; grid-template-columns:28px 1fr auto; align-items:center;
+    height:32px; padding:0 8px 0 4px; border-radius:6px; cursor:default;
+    color:var(--ctx-fg); font-size:13.5px; line-height:1;
+    transition:background var(--dur-fast) var(--ease-snap); }
+  .ctx-row:hover{ background:var(--ctx-hover); }
+  .ctx-row.editing{ background:var(--accent-soft); }
+  .ctx-row.disabled{ opacity:.4; }
+  .ctx-row .glyph{ width:28px; height:32px; display:flex; align-items:center; justify-content:center;
+    font-size:14px; opacity:.95; cursor:pointer; }
+  .glyph-img{ width:16px; height:16px; object-fit:contain;
+    image-rendering:-webkit-optimize-contrast; -webkit-user-drag:none; user-select:none; }
+  .ctx-row .label{ flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:8px; }
+  .ctx-row .label-input{ background:rgba(0,0,0,.25); border:1px solid rgba(var(--glow-a),.5);
+    border-radius:5px; color:var(--ctx-fg); font-size:13px; font-family:inherit;
+    padding:2px 6px; outline:none; width:100%; }
+  html[data-preview-theme="light"] .ctx-row .label-input{ background:rgba(255,255,255,.7); }
+  .ctx-row .right{ font-size:11.5px; color:var(--ctx-shortcut); padding-right:8px;
+    display:inline-flex; align-items:center; gap:6px; }
+  .ctx-row .chev{ font-size:11px; color:var(--ctx-shortcut); padding-right:4px; }
+  .ctx-row .shortcut{ font-size:11px; color:var(--ctx-shortcut); opacity:.85; }
+  .ctx-row .sys-mark{ font-size:9px; color:var(--ctx-shortcut); border:1px solid var(--ctx-sep);
+    padding:1px 4px; border-radius:3px; letter-spacing:.5px; }
+  .ctx-sep{ height:1px; margin:4px 8px; background:var(--ctx-sep); }
+  .ctx-more{ font-size:13px; color:var(--ctx-fg); }
+  .ctx-empty{ padding:18px; text-align:center; font-size:12.5px; color:var(--ctx-shortcut); }
+
+  /* ============================================================
+     级联子菜单（折叠菜单）飞出层。某些软件（如夸克AI、WinRAR 压缩组）把一组
+     子项折叠进一个父项，悬停父项时向右飞出子菜单。这里用纯 CSS :hover 还原。
+     父项行包一层 position:relative 的容器，飞出层绝对定位到右侧。
+     Cascading submenu flyout: hover the parent to fly the child menu out.
+     ============================================================ */
+  .ctx-sub{ position:relative; }
+  .ctx-flyout{ position:absolute; top:-8px; left:100%; margin-left:2px;
+    width:max-content; min-width:170px; max-width:320px; padding:8px 4px;
+    border-radius:8px; background:var(--ctx-bg); color:var(--ctx-fg);
+    -webkit-backdrop-filter:blur(30px) saturate(180%); backdrop-filter:blur(30px) saturate(180%);
+    border:1px solid var(--ctx-stroke);
+    box-shadow:0 12px 28px rgba(0,0,0,.42), 0 0 0 .5px rgba(255,255,255,.06) inset;
+    opacity:0; visibility:hidden; transform:translateX(-4px);
+    transition:opacity var(--dur-fast) var(--ease-snap),
+               transform var(--dur-fast) var(--ease-snap), visibility var(--dur-fast);
+    z-index:20; }
+  html[data-preview-theme="light"] .ctx-flyout{
+    box-shadow:0 12px 28px rgba(20,40,90,.18), 0 0 0 .5px rgba(255,255,255,.5) inset; }
+  /* 悬停父项（含飞出层自身，避免移到子菜单时收起）即展开 */
+  .ctx-sub:hover > .ctx-flyout{ opacity:1; visibility:visible; transform:translateX(0); }
+  /* 飞出层贴右侧超出视口时往左翻（窄窗兜底）*/
+  .ctx-flyout.flip-left{ left:auto; right:100%; margin-left:0; margin-right:2px; }
+  /* 经典菜单的飞出层用经典配色 */
+  .ctx-flyout.classic{ border-radius:2px; background:#f5f5f5; color:#1c1c1c;
+    border:1px solid #999; box-shadow:2px 2px 6px rgba(0,0,0,.25);
+    -webkit-backdrop-filter:none; backdrop-filter:none; padding:2px; min-width:160px; }
+  html[data-preview-theme="dark"] .ctx-flyout.classic{
+    background:#262626; color:#f0f0f0; border-color:#4a4a4a;
+    box-shadow:2px 2px 8px rgba(0,0,0,.5); }
+  /* 递归飞出节点：每个子项行自身相对定位，深层飞出（ctx-flyout-deep）绝对定位到
+     行右侧，悬停该行才展开（多级级联，如 7-Zip → CRC SHA → SHA-256）。 */
+  .ctx-flyout .ctx-classic-row{ position:relative; }
+  .ctx-flyout-deep{ position:absolute; top:-3px; left:100%; margin-left:1px;
+    opacity:0; visibility:hidden; transform:translateX(-4px);
+    transition:opacity var(--dur-fast) var(--ease-snap),
+               transform var(--dur-fast) var(--ease-snap), visibility var(--dur-fast); }
+  .ctx-flyout .ctx-classic-row:hover > .ctx-flyout-deep{
+    opacity:1; visibility:visible; transform:translateX(0); }
+
+  /* ============================================================
+     经典视图：仿 Win10 / Win7 传统右键菜单
+     —— 浅灰底（白底浮起感）、直角或微圆角 4px、行高 24px、
+        左侧 24px 图标列、助记符显示为下划线字母（&D -> 显示设置(D)）
+     Classic view: mimics Win10 / Win7 traditional context menu.
+     ============================================================ */
+  .ctx-menu-classic{ min-width:240px; max-width:320px; padding:2px;
+    border-radius:2px;
+    background:#f5f5f5; color:#1c1c1c;
+    border:1px solid #999; box-shadow:2px 2px 6px rgba(0,0,0,.25); }
+  html[data-preview-theme="dark"] .ctx-menu-classic{
+    background:#262626; color:#f0f0f0; border-color:#4a4a4a;
+    box-shadow:2px 2px 8px rgba(0,0,0,.5); }
+  .ctx-classic-row{ display:grid; grid-template-columns:28px 1fr auto;
+    align-items:center; height:24px; padding:0 6px 0 0; cursor:default;
+    color:inherit; font-size:13px;
+    transition:background var(--dur-fast) var(--ease-snap); }
+  .ctx-classic-row:hover{ background:#3399ff; color:#fff; }
+  html[data-preview-theme="dark"] .ctx-classic-row:hover{ background:#2a5fa0; color:#fff; }
+  .ctx-classic-row.editing{ background:#3399ff; color:#fff; }
+  .ctx-classic-row.disabled{ opacity:.4; cursor:not-allowed; }
+  .ctx-classic-row .glyph{ width:24px; height:20px; display:flex;
+    align-items:center; justify-content:center; font-size:12px; cursor:pointer; }
+  .ctx-classic-row .label{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    padding-right:10px; font-family:"Segoe UI","Microsoft YaHei",sans-serif; }
+  .ctx-classic-row .label u{ text-decoration:underline; }
+  .ctx-classic-row .label-input{ background:#fff; border:1px solid #3399ff;
+    color:#1c1c1c; font-size:13px; font-family:inherit; padding:1px 4px;
+    outline:none; width:100%; height:20px; border-radius:2px; }
+  html[data-preview-theme="dark"] .ctx-classic-row .label-input{
+    background:#1c1c1c; color:#f0f0f0; border-color:#5a8ec8; }
+  .ctx-classic-row .right{ font-size:11px; color:#666;
+    display:inline-flex; align-items:center; gap:6px; padding-right:4px; }
+  .ctx-classic-row:hover .right{ color:#cfd8e3; }
+  html[data-preview-theme="dark"] .ctx-classic-row .right{ color:#9aa3b0; }
+  .ctx-classic-row .sys-mark{ font-size:9px; padding:0 3px;
+    border:1px solid currentColor; border-radius:2px; opacity:.75; }
+  .ctx-classic-row .sub-arrow{ font-size:9px; opacity:.7; }
+  .ctx-classic-sep{ height:1px; margin:3px 4px;
+    background:linear-gradient(90deg,transparent,#aaa,transparent); }
+  html[data-preview-theme="dark"] .ctx-classic-sep{
+    background:linear-gradient(90deg,transparent,#4a4a4a,transparent); }
+
+  /* 图标编辑浮层 / Icon edit popover */
+  .glyph-pick{ position:absolute; z-index:50; padding:10px; min-width:280px;
+    border-radius:var(--radius-sm); display:flex; flex-direction:column; gap:8px; }
+  .glyph-pick .gp-title{ font-size:11px; color:var(--fg-dim); letter-spacing:.5px; text-transform:uppercase; }
+  .glyph-pick .gp-input{ background:rgba(0,0,0,.2); border:1px solid var(--glass-stroke);
+    border-radius:6px; padding:7px 10px; color:var(--fg); font-family:var(--font-mono);
+    font-size:12px; outline:none; }
+  .glyph-pick .gp-input:focus{ border-color:rgba(var(--glow-a),.55); }
+  .glyph-pick .gp-grid{ display:grid; grid-template-columns:repeat(8,1fr); gap:3px; }
+  .glyph-pick .g{ width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+    border-radius:6px; cursor:pointer; font-size:15px;
+    transition:background var(--dur-fast); }
+  .glyph-pick .g:hover{ background:var(--accent-soft); }
+  .glyph-pick .gp-actions{ display:flex; gap:6px; justify-content:flex-end; }
+
+  /* 可视化视图行右键操作菜单 / Right-click action menu (visual rows) */
+  .row-ctx{ position:absolute; z-index:60; padding:5px; min-width:148px;
+    border-radius:var(--radius-sm); display:flex; flex-direction:column; gap:1px; }
+  .row-ctx .rc-item{ display:flex; align-items:center; gap:9px; padding:7px 11px;
+    font-size:13px; color:var(--fg); border-radius:7px; cursor:pointer;
+    transition:background var(--dur-quick); }
+  .row-ctx .rc-item:hover{ background:var(--accent-soft); }
+  .row-ctx .rc-item.dis{ opacity:.38; cursor:not-allowed; pointer-events:none; }
+  .row-ctx .rc-ic{ width:14px; text-align:center; font-size:12px; color:var(--fg-muted); }
+  .row-ctx .rc-item:hover .rc-ic{ color:var(--accent-bright); }
+  .row-ctx .rc-sep{ height:1px; margin:4px 6px; background:var(--glass-stroke); }
+
+  /* ============================================================
+     列表视图（表格 + 批量勾选）
+     List view (table + batch checkbox)
+     ============================================================ */
+  .list{ display:flex; flex-direction:column; gap:1px; border-radius:var(--radius); overflow:hidden;
+    border:1px solid var(--glass-stroke); background:var(--glass-stroke); }
+  .lrow{ display:grid; grid-template-columns:42px 36px 1fr 110px 90px 150px; align-items:center; gap:10px;
+    padding:11px 14px; background:var(--glass-fill);
+    transition:background var(--dur-fast); font-size:13px; }
+  .lrow:hover{ background:var(--glass-fill-strong); }
+  .lrow.head{ background:transparent; color:var(--fg-dim); font-size:11px;
+    font-weight:600; letter-spacing:.4px; text-transform:uppercase; }
+  .lrow .nm{ display:flex; align-items:center; gap:8px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lrow .nm .name{ overflow:hidden; text-overflow:ellipsis; }
+  .lrow .src{ font-size:11px; color:var(--fg-dim); }
+  .lrow .glyph-cell{ font-size:15px; text-align:center;
+    display:flex; align-items:center; justify-content:center; }
+  /* 列表操作按钮：统一到 FairyGlass 玻璃风（玻璃填充 + 描边 + 圆角 + hover 提蓝边
+     + active 微缩），与全局 .btn 同一语汇，不再用无质感的纯透明文字按钮。
+     List action buttons follow the FairyGlass glass idiom like the global .btn. */
+  .lrow .actions{ display:flex; gap:6px; justify-content:flex-end; }
+  .lrow .actions button{ display:inline-flex; align-items:center; gap:5px;
+    background:var(--glass-fill); border:1px solid var(--glass-stroke); color:var(--fg-muted);
+    cursor:pointer; padding:5px 10px; border-radius:var(--radius-sm);
+    font-size:11.5px; font-weight:500; font-family:inherit;
+    transition:transform var(--dur-fast) var(--spring),
+               background var(--dur-quick), border-color var(--dur-quick), color var(--dur-quick); }
+  .lrow .actions button:hover{ color:var(--fg); background:var(--glass-fill-strong);
+    border-color:rgba(var(--glow-a),.4); }
+  .lrow .actions button:active{ transform:scale(.96); }
+  .lrow .actions button:disabled{ opacity:.4; cursor:not-allowed;
+    background:var(--glass-fill); border-color:var(--glass-stroke); color:var(--fg-muted); }
+  .lrow .actions button:disabled:hover{ transform:none; }
+  .lrow .actions button .ic{ font-size:11px; opacity:.85; }
+
+  /* 复选框 / Checkbox */
+  .ck{ width:18px; height:18px; border-radius:5px; border:1.5px solid var(--glass-stroke);
+    background:var(--glass-fill); cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
+    transition:background var(--dur-fast), border-color var(--dur-fast); }
+  .ck.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .ck .tick{ font-size:11px; font-weight:800; }
+
+  /* 开关 / Toggle */
+  /* 关态：旧版用 --glass-fill（白 5%）+ --glass-stroke（白 16%），在玻璃底上几乎
+     隐形，看不出这是个开关。改用更实的深色底 + 更明显描边，让「关」也清晰可辨。
+     Off state needs a solid-enough track; the old glass-fill was near-invisible. */
+  /* ⚠ 必须 inline-block：.switch 是 <span>，默认 display:inline 时 width/height 无效，
+     轨道撑不开，只剩内部 absolute 的 .knob 那颗球可见（「为什么就一个球」的根因）。 */
+  .switch{ display:inline-block; vertical-align:middle;
+    position:relative; width:38px; height:22px; border-radius:var(--radius-pill);
+    background:rgba(0,0,0,.32); border:1px solid rgba(255,255,255,.30); cursor:pointer;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.35);
+    transition:background var(--dur-base) var(--ease-snap), border-color var(--dur-base); }
+  .switch.on{ background:linear-gradient(180deg,rgba(var(--glow-a),.85),rgba(var(--glow-c),.9));
+    border-color:transparent; box-shadow:none; }
+  .switch.dis{ opacity:.4; cursor:not-allowed; }
+  .switch .knob{ position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
+    background:linear-gradient(180deg,#fff,#d6e2f5); box-shadow:0 1px 3px rgba(0,0,0,.4);
+    transition:transform var(--dur-base) var(--spring); }
+  .switch.on .knob{ transform:translateX(16px); }
+
+  /* 批量魔法面板 / Batch magic panel */
+  .magic{ display:flex; align-items:center; gap:10px; padding:14px 16px; flex-wrap:wrap;
+    background:linear-gradient(120deg,rgba(77,159,255,.10),var(--glass-fill));
+    margin-bottom:14px; border-radius:var(--radius); }
+  .magic .label{ font-size:12.5px; color:var(--fg-muted); }
+  .magic input[type=text]{ background:rgba(0,0,0,.20); border:1px solid var(--glass-stroke);
+    border-radius:7px; color:var(--fg); font-family:inherit; font-size:13px; padding:8px 12px; outline:none;
+    transition:border-color var(--dur-quick); min-width:140px; }
+  .magic input[type=text]:focus{ border-color:rgba(var(--glow-a),.55); }
+  .magic .preset{ padding:5px 11px; border-radius:var(--radius-pill); background:var(--glass-fill);
+    border:1px solid var(--glass-stroke); color:var(--fg-muted); cursor:pointer; font-size:12px;
+    transition:color var(--dur-quick), background var(--dur-quick); }
+  .magic .preset:hover{ color:var(--fg); background:var(--accent-soft); }
+  .magic .count{ font-size:12px; color:var(--accent-bright); }
+
+  /* Win11 专区大开关卡 / Win11 mega switch card */
+  .switch-card{ display:flex; align-items:center; gap:16px; padding:20px; margin-bottom:14px;
+    background:linear-gradient(120deg,rgba(77,159,255,.12),var(--glass-fill)); border-color:rgba(var(--glow-a),.30); }
+  .switch-card .big-glyph{ width:48px; height:48px; flex-shrink:0; border-radius:12px;
+    display:flex; align-items:center; justify-content:center; font-size:22px;
+    background:var(--accent-soft); border:1px solid rgba(var(--glow-a),.3); }
+  .switch-card .meta{ flex:1; min-width:0; }
+  .switch-card .meta .t{ font-size:14.5px; font-weight:600; margin-bottom:4px; }
+  .switch-card .meta .d{ font-size:12px; color:var(--fg-muted); line-height:1.6; }
+
+  /* 加载/空态 / Loading & empty */
+  .empty{ text-align:center; color:var(--fg-dim); font-size:13px; padding:40px 0; }
+  .loading{ text-align:center; color:var(--fg-muted); font-size:13px; padding:32px 0;
+    display:flex; align-items:center; justify-content:center; gap:10px; }
+  .spinner{ width:14px; height:14px; border-radius:50%;
+    border:2px solid var(--glass-stroke); border-top-color:var(--accent);
+    animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* 弹窗 / Modal */
+  .modal-mask{ position:fixed; inset:0; background:rgba(0,0,0,.5);
+    -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center; z-index:90; }
+  .modal{ width:440px; max-width:90vw; padding:22px; border-radius:var(--radius);
+    background:var(--glass-fill-strong);
+    -webkit-backdrop-filter:blur(18px) saturate(180%); backdrop-filter:blur(18px) saturate(180%);
+    border:1px solid var(--glass-stroke); box-shadow:var(--shadow-glass), var(--inset-glass);
+    animation:modal-in var(--dur-enter) var(--spring); }
+  @keyframes modal-in{ from{ opacity:0; transform:translateY(8px) scale(.98); }
+    to{ opacity:1; transform:translateY(0) scale(1); } }
+  .modal .title{ font-size:15px; font-weight:600; margin-bottom:10px; }
+  .modal .desc{ font-size:13px; color:var(--fg-muted); line-height:1.7; margin-bottom:16px; }
+  .modal .desc .strong{ color:var(--fg); font-weight:600; }
+  .modal .actions{ display:flex; gap:10px; justify-content:flex-end; }
+
+  /* toast / Toast */
+  .toast{ position:fixed; bottom:26px; left:50%; transform:translateX(-50%); z-index:99;
+    padding:11px 20px; border-radius:var(--radius-pill); font-size:13px; color:var(--fg);
+    background:var(--glass-fill-strong);
+    -webkit-backdrop-filter:blur(18px) saturate(180%); backdrop-filter:blur(18px) saturate(180%);
+    border:1px solid var(--glass-stroke); box-shadow:var(--shadow-glass);
+    animation:toast-in var(--dur-enter) var(--spring); }
+  .toast.err{ border-color:rgba(239,68,68,.4); color:var(--danger); }
+  .toast.ok{ border-color:rgba(110,231,183,.40); color:var(--ok); }
+  @keyframes toast-in{ from{ opacity:0; transform:translate(-50%,12px); } to{ opacity:1; transform:translate(-50%,0); } }
+
+  .lg-enter{ animation:lg-enter var(--dur-enter) var(--spring); }
+  @keyframes lg-enter{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 侧栏 / Sidebar -->
+  <aside class="side glass">
+    <div class="brand">{{ t('brand.zh') }}<span class="en">{{ t('brand.en') }}</span></div>
+    <nav class="nav">
+      <div v-for="it in navItems" :key="it.key" class="nav-item" :class="{on: tab===it.key}" @click="tab=it.key">
+        <span class="ic">{{ it.ic }}</span>{{ t('nav.'+it.key) }}
+      </div>
+    </nav>
+    <div class="foot">
+      v{{ appVersion }} · {{ menuStatus.classic ? t('status.classic') : t('status.modern') }}
+    </div>
+  </aside>
+
+  <!-- 主区 / Main -->
+  <main class="main">
+    <header class="header glass">
+      <div class="title">{{ t('nav.'+tab) }}</div>
+      <div class="spacer"></div>
+
+      <!-- 主题切换：跟随系统/浅色/深色 -->
+      <!-- Theme toggle: system / light / dark -->
+      <div class="theme-wrap">
+        <div class="icon-pill" :class="{open: showTheme}" @click.stop="showTheme=!showTheme; showLang=false">
+          <span>{{ themeLabel }}</span><span class="arrow">▼</span>
+        </div>
+        <div v-if="showTheme" class="popover glass" @click.stop>
+          <div class="pop-title">{{ t('theme.preview_scope') }}</div>
+          <div v-for="m in themeModes" :key="m.code" class="opt" :class="{on: themeMode===m.code}"
+               @click="setTheme(m.code)">
+            <span class="glyph">{{ m.glyph }}</span>{{ t('theme.'+m.code) }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 语言切换 / Language switch -->
+      <div class="lang-wrap">
+        <div class="icon-pill" :class="{open: showLang}" @click.stop="showLang=!showLang; showTheme=false">
+          <span>{{ langLabel }}</span><span class="arrow">▼</span>
+        </div>
+        <div v-if="showLang" class="popover glass" @click.stop>
+          <div v-for="l in langs" :key="l.code" class="opt" :class="{on: lang===l.code}"
+               @click="setLang(l.code)">{{ l.name }}</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="content" @click="closePopovers">
+      <!-- ============ 菜单编辑（场景选择 + 双视图） ============ -->
+      <!-- ============ Menu Editor (scene tabs + dual view) ============ -->
+      <div v-show="tab==='editor'" class="lg-enter">
+        <!-- 场景选择条 / Scene tab strip -->
+        <div class="scene-bar">
+          <div v-for="sc in scenes" :key="sc.id" class="scene-tab" :class="{on: scene===sc.id}"
+               @click="setScene(sc.id)">
+            <span>{{ t('scene.'+sc.id) }}</span>
+            <span class="count" v-if="sceneCounts[sc.id] != null">{{ sceneCounts[sc.id] }}</span>
+          </div>
+        </div>
+
+        <div class="slogan">{{ t('editor.slogan') }}</div>
+
+        <div class="toolbar">
+          <div class="view-seg">
+            <button :class="{on: view==='visual'}" @click="view='visual'">{{ t('editor.view_visual') }}</button>
+            <button :class="{on: view==='list'}" @click="view='list'">{{ t('editor.view_list') }}</button>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn sm" @click="reloadScene" :disabled="busy">
+            <span class="ic">↻</span>{{ t('editor.refresh') }}
+          </button>
+          <button class="btn sm" @click="backupCurrent" :disabled="busy">
+            <span class="ic">▣</span>{{ t('editor.backup') }}
+          </button>
+        </div>
+
+        <!-- 加载中 / Loading -->
+        <div v-if="loading" class="loading"><span class="spinner"></span>{{ t('editor.loading') }}</div>
+
+        <!-- 空 / Empty -->
+        <div v-else-if="!items.length" class="empty">{{ t('editor.empty') }}</div>
+
+        <!-- 可视化视图：并排呈现 Win11 新菜单 →（显示更多选项）→ 经典菜单。
+             两张都从同一份扫描项渲染，都可改名/换图标，体现真实层级关系。
+             Visual view: Win11 new menu (top layer) and the classic menu it
+             expands into via "Show more options", side by side. Both editable. -->
+        <div v-else-if="view==='visual'" class="visual-stage">
+          <!-- 左：Win11 新菜单（顶层）/ Left: Win11 new menu (top layer) -->
+          <div class="visual-col">
+            <div class="visual-cap">
+              <span class="vc-dot modern"></span>{{ t('editor.cap_win11') }}
+              <span class="vc-lock" :title="t('editor.modern_readonly_tip')">⚿ {{ t('editor.modern_readonly') }}</span>
+            </div>
+            <div class="ctx-menu">
+              <!-- Win11 顶部 5 个工具图标（仅 file/folder/drive 三种"对象类"场景）-->
+              <div v-if="showCtxToolbar" class="ctx-toolbar">
+                <div class="ctx-tool" :title="t('win11.tool_cut')"><span class="gi">✂</span></div>
+                <div class="ctx-tool" :title="t('win11.tool_copy')"><span class="gi">⧉</span></div>
+                <div class="ctx-tool" :title="t('win11.tool_rename')"><span class="gi">✎</span></div>
+                <div class="ctx-tool" :title="t('win11.tool_share')"><span class="gi">↗</span></div>
+                <div class="ctx-tool" :title="t('win11.tool_delete')"><span class="gi">✕</span></div>
+              </div>
+              <div v-if="showCtxToolbar" class="ctx-sep"></div>
+
+              <!-- 现代菜单只读示意项 —— 只摆 shell 内建命令，绝不渲染扫描项。
+                   现代菜单层由系统管控（只接纳 IExplorerCommand + 包标识的扩展），
+                   传统注册表项进不来，因此这里纯预览、不可改名/换图标/启停。
+                   Modern menu = read-only shell built-ins. Registry can't touch it. -->
+              <template v-for="it in modernMenuItems" :key="it.id">
+                <div class="ctx-row">
+                  <span class="glyph"><span>{{ it.glyph }}</span></span>
+                  <span class="label">{{ it.label }}</span>
+                  <span class="right">
+                    <span v-if="it.shortcut" class="shortcut">{{ it.shortcut }}</span>
+                    <span v-if="it.chev" class="chev">▸</span>
+                  </span>
+                </div>
+              </template>
+
+              <!-- 系统固定项（属性）—— shell 内建，纯展示，不可改 / Built-in: Properties -->
+              <template v-if="systemFixedItems.bottom.length">
+                <div class="ctx-sep"></div>
+                <div v-for="it in systemFixedItems.bottom" :key="it.id" class="ctx-row">
+                  <span class="glyph" :title="t('editor.system_item')">
+                    <span>{{ it.glyph }}</span>
+                  </span>
+                  <span class="label">{{ it.label }}</span>
+                  <span class="right">
+                    <span class="sys-mark" :title="t('editor.system_item')">SYS</span>
+                    <span class="shortcut">{{ it.shortcut }}</span>
+                  </span>
+                </div>
+              </template>
+
+              <!-- 底部：显示更多选项 —— 点它就展开右边的经典菜单（Shift+F10）/ entry to classic menu -->
+              <div class="ctx-sep"></div>
+              <div class="ctx-row ctx-more-row">
+                <span class="glyph">⋯</span>
+                <span class="label ctx-more">{{ t('win11.show_more') }}</span>
+                <span class="right"><span class="chev">▸</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 中：层级连接箭头 / Hierarchy connector -->
+          <div class="visual-link">
+            <div class="vl-arrow">▸</div>
+            <div class="vl-text">{{ t('editor.expands_to') }}</div>
+          </div>
+
+          <!-- 右：经典菜单（点"显示更多选项"后出现的旧版完整菜单）/ Right: classic menu -->
+          <div class="visual-col">
+            <div class="visual-cap">
+              <span class="vc-dot classic"></span>{{ t('editor.cap_classic') }}
+            </div>
+            <div class="ctx-menu-classic">
+              <!-- 系统固定项（剪切/复制/粘贴）—— shell 内建，纯展示 / Built-in: Cut/Copy/Paste -->
+              <template v-if="systemFixedItems.top.length">
+                <div v-for="it in systemFixedItems.top" :key="it.id" class="ctx-classic-row">
+                  <span class="glyph" :title="t('editor.system_item')">
+                    <span>{{ it.glyph }}</span>
+                  </span>
+                  <span class="label">{{ it.label }}</span>
+                  <span class="right">
+                    <span class="sys-mark" :title="t('editor.system_item')">SYS</span>
+                    <span class="shortcut">{{ it.shortcut }}</span>
+                  </span>
+                </div>
+                <div class="ctx-classic-sep"></div>
+              </template>
+
+              <template v-for="(it, idx) in visibleItems" :key="it.id">
+                <!-- 折叠（级联）父项：包一层 .ctx-sub，悬停飞出子菜单 / cascading parent -->
+                <div v-if="it.hasSubmenu" class="ctx-sub">
+                  <div class="ctx-classic-row" :class="{ editing: editId===it.id && editPanel==='classic', disabled: !it.enabled }"
+                       @contextmenu.prevent.stop="openCtxMenu(it, $event)">
+                    <span class="glyph" @click.stop="it.canChangeIcon && openGlyphPick(it, $event)"
+                          :title="it.canChangeIcon ? t('editor.change_icon') : t('editor.icon_locked')"
+                          :style="{cursor: it.canChangeIcon ? 'pointer' : 'default'}">
+                      <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
+                      <span v-else>{{ fallbackGlyph(it) }}</span>
+                    </span>
+                    <input v-if="editId===it.id && editPanel==='classic'" class="label-input" v-model="editBuf"
+                           @keyup.enter="commitRename(it)" @keyup.esc="cancelRename"
+                           @blur="commitRename(it)" :ref="setEditRef" />
+                    <span v-else class="label" @click.stop="startRename(it, 'classic')"
+                          :title="it.canRename ? t('editor.click_rename') : t('editor.rename_locked')"
+                          :style="{cursor: it.canRename ? 'text' : 'default'}"
+                          v-html="renderClassicLabel(it)"></span>
+                    <span class="right">
+                      <span v-if="it.system" class="sys-mark" :title="t('editor.system_item')">SYS</span>
+                      <span class="sub-arrow">▶</span>
+                    </span>
+                  </div>
+                  <!-- 飞出子菜单（只读，递归渲染任意深度 + 分隔线）/ recursive flyout -->
+                  <div class="ctx-flyout classic">
+                    <div v-if="!it.children || !it.children.length" class="ctx-empty">{{ t('editor.submenu_empty') }}</div>
+                    <template v-for="(ch, ci) in it.children" :key="ch.id || ci">
+                      <div v-if="ch.separator" class="ctx-classic-sep"></div>
+                      <ctx-flyout-node v-else :item="ch" />
+                    </template>
+                  </div>
+                </div>
+
+                <!-- 普通项 / normal item -->
+                <div v-else class="ctx-classic-row" :class="{ editing: editId===it.id && editPanel==='classic', disabled: !it.enabled }"
+                     @contextmenu.prevent.stop="openCtxMenu(it, $event)">
+                  <span class="glyph" @click.stop="it.canChangeIcon && openGlyphPick(it, $event)"
+                        :title="it.canChangeIcon ? t('editor.change_icon') : t('editor.icon_locked')"
+                        :style="{cursor: it.canChangeIcon ? 'pointer' : 'default'}">
+                    <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
+                    <span v-else>{{ fallbackGlyph(it) }}</span>
+                  </span>
+                  <input v-if="editId===it.id && editPanel==='classic'" class="label-input" v-model="editBuf"
+                         @keyup.enter="commitRename(it)" @keyup.esc="cancelRename"
+                         @blur="commitRename(it)" :ref="setEditRef" />
+                  <span v-else class="label" @click.stop="startRename(it, 'classic')"
+                        :title="it.canRename ? t('editor.click_rename') : t('editor.rename_locked')"
+                        :style="{cursor: it.canRename ? 'text' : 'default'}"
+                        v-html="renderClassicLabel(it)"></span>
+                  <span class="right">
+                    <span v-if="it.system" class="sys-mark" :title="t('editor.system_item')">SYS</span>
+                    <span v-if="it.kind==='handler'">▶</span>
+                  </span>
+                </div>
+              </template>
+
+              <!-- 系统固定项（属性）—— shell 内建，纯展示 / Built-in: Properties -->
+              <template v-if="systemFixedItems.bottom.length">
+                <div class="ctx-classic-sep"></div>
+                <div v-for="it in systemFixedItems.bottom" :key="it.id" class="ctx-classic-row">
+                  <span class="glyph" :title="t('editor.system_item')">
+                    <span>{{ it.glyph }}</span>
+                  </span>
+                  <span class="label">{{ it.label }}</span>
+                  <span class="right">
+                    <span class="sys-mark" :title="t('editor.system_item')">SYS</span>
+                    <span class="shortcut">{{ it.shortcut }}</span>
+                  </span>
+                </div>
+              </template>
+            </div>
+          </div>
+          <!-- 统一提示行（并排两菜单下方居中）/ unified hint under both menus -->
+          <div class="visual-hint">{{ t('editor.visual_hint') }}</div>
+        </div>
+
+        <!-- 列表视图 / List view -->
+        <div v-else-if="view==='list'">
+          <div class="magic glass">
+            <span class="label">{{ t('magic.title') }}</span>
+            <input type="text" v-model="magicSuffix" :placeholder="t('magic.placeholder')" />
+            <span class="preset" v-for="p in magicPresets" :key="p" @click="magicSuffix=p">{{ p }}</span>
+            <div class="spacer"></div>
+            <span class="count">{{ t('magic.selected', {n: selectedCount}) }}</span>
+            <button class="btn sm primary" :disabled="!selectedCount || !magicSuffix || busy" @click="applyMagic">
+              <span class="ic">✦</span>{{ t('magic.apply') }}
+            </button>
+          </div>
+
+          <div class="list">
+            <div class="lrow head">
+              <span>
+                <span class="ck" :class="{on: allChecked}" @click="toggleAll">
+                  <span class="tick" v-if="allChecked">✓</span>
+                </span>
+              </span>
+              <span>{{ t('list.icon') }}</span>
+              <span>{{ t('list.name') }}</span>
+              <span>{{ t('list.source') }}</span>
+              <span style="text-align:center">{{ t('list.enabled') }}</span>
+              <span style="text-align:right">{{ t('list.actions') }}</span>
+            </div>
+            <div v-for="it in items" :key="it.id" class="lrow">
+              <span>
+                <span class="ck" :class="{on: it._checked}" @click="it._checked=!it._checked">
+                  <span class="tick" v-if="it._checked">✓</span>
+                </span>
+              </span>
+              <span class="glyph-cell">
+                <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
+                <span v-else>{{ fallbackGlyph(it) }}</span>
+              </span>
+              <span class="nm">
+                <span class="name">{{ displayLabel(it) }}</span>
+                <span v-if="it.system" class="sys-mark" style="font-size:9px">SYS</span>
+              </span>
+              <span class="src">{{ t('source.'+(it.kind==='handler' ? 'com' : 'verb')) }}</span>
+              <span style="text-align:center">
+                <span class="switch" :class="{on: it.enabled, dis: !it.canToggle}"
+                      @click="it.canToggle && askToggle(it)"><span class="knob"></span></span>
+              </span>
+              <span class="actions">
+                <button :disabled="!it.canRename" @click="startRename(it)" :title="t('list.rename')"><span class="ic">✎</span>{{ t('list.rename') }}</button>
+                <button :disabled="!it.canChangeIcon" @click="openGlyphPickFromList(it, $event)" :title="t('list.icon_btn')"><span class="ic">◆</span>{{ t('list.icon_btn') }}</button>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ Win11 专区 ============ -->
+      <div v-show="tab==='win11'" class="lg-enter">
+        <div class="slogan">{{ t('win11.slogan') }}</div>
+
+        <div class="switch-card glass">
+          <div class="big-glyph">▤</div>
+          <div class="meta">
+            <div class="t">{{ t('win11.classic_title') }}</div>
+            <div class="d">{{ t('win11.classic_desc') }}</div>
+          </div>
+          <span class="badge" :class="menuStatus.classic ? 'classic' : 'modern'">
+            <span class="dot"></span>{{ menuStatus.classic ? t('win11.now_classic') : t('win11.now_modern') }}
+          </span>
+        </div>
+
+        <div class="card glass">
+          <div class="card-title">{{ t('win11.action_title') }}</div>
+          <div class="card-desc">{{ t('win11.action_desc') }}</div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn primary" :disabled="busy" @click="doToggle">
+              <span class="ic">⇄</span>{{ t('win11.toggle') }}
+            </button>
+            <button class="btn" :disabled="busy || menuStatus.classic" @click="doEnable">{{ t('win11.enable') }}</button>
+            <button class="btn" :disabled="busy || !menuStatus.classic" @click="doRestore">{{ t('win11.restore') }}</button>
+            <button class="btn sm" :disabled="busy" @click="refreshStatus">
+              <span class="ic">↻</span>{{ t('win11.refresh') }}
+            </button>
+          </div>
+          <div class="card-desc" style="margin:14px 0 0; color:var(--warn);">{{ t('win11.warn') }}</div>
+        </div>
+
+        <div class="cat-title">{{ t('win11.sparse_section') }}</div>
+        <div class="card glass">
+          <div class="card-title">{{ t('win11.sparse_title') }}</div>
+          <div class="card-desc">{{ t('win11.sparse_desc') }}</div>
+          <span class="badge modern"><span class="dot"></span>{{ t('win11.coming_soon') }}</span>
+        </div>
+      </div>
+
+      <!-- ============ 关于 / About ============ -->
+      <div v-show="tab==='about'" class="lg-enter">
+        <div class="card glass">
+          <div class="card-title">{{ t('brand.zh') }} · {{ t('brand.en') }}</div>
+          <div class="card-desc" v-html="t('about.body')"></div>
+        </div>
+        <div class="card glass">
+          <div class="card-title">{{ t('about.tech_title') }}</div>
+          <div class="card-desc">{{ t('about.tech_body') }}</div>
+        </div>
+        <div class="card glass">
+          <div class="card-title">{{ t('about.info_title') }}</div>
+          <div class="info-grid">
+            <span class="k">{{ t('about.author_label') }}</span>
+            <span class="v">{{ t('about.author_value') }}</span>
+            <span class="k">{{ t('about.version_label') }}</span>
+            <span class="v">v{{ appVersion }}</span>
+            <span class="k">{{ t('about.license_label') }}</span>
+            <span class="v">MIT</span>
+            <span class="k">{{ t('about.repo_label') }}</span>
+            <span class="v"><a class="repo-link" :href="repoUrl" @click.prevent="openRepo">{{ repoUrl }}</a></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 图标编辑浮层 / Icon edit popover -->
+  <div v-if="glyphPickFor" class="glyph-pick glass" :style="glyphPickStyle" @click.stop>
+    <div class="gp-title">{{ t('editor.icon_source_label') }}</div>
+    <input class="gp-input" type="text" v-model="glyphSourceBuf"
+           :placeholder="t('editor.icon_source_ph')" />
+    <div class="gp-title">{{ t('editor.icon_fallback_label') }}</div>
+    <div class="gp-grid">
+      <div class="g" v-for="g in glyphChoices" :key="g" @click="pickGlyph(g)">{{ g }}</div>
+    </div>
+    <div class="gp-actions">
+      <button class="btn sm" @click="glyphPickFor=null">{{ t('common.cancel') }}</button>
+      <button class="btn sm primary" @click="commitIcon">{{ t('common.apply') }}</button>
+    </div>
+  </div>
+
+  <!-- 可视化视图行右键操作菜单（改名 / 换图标 / 启停）/ Right-click action menu for visual rows -->
+  <div v-if="ctxMenu.for" class="row-ctx glass" :style="ctxMenuStyle" @click.stop>
+    <div class="rc-item" :class="{dis: !ctxMenu.for.canRename}"
+         @click="ctxMenu.for.canRename && ctxAction('rename')">
+      <span class="rc-ic">✎</span>{{ t('list.rename') }}
+    </div>
+    <div class="rc-item" :class="{dis: !ctxMenu.for.canChangeIcon}"
+         @click="ctxMenu.for.canChangeIcon && ctxAction('icon')">
+      <span class="rc-ic">◆</span>{{ t('list.icon_btn') }}
+    </div>
+    <div class="rc-sep"></div>
+    <div class="rc-item" :class="{dis: !ctxMenu.for.canToggle}"
+         @click="ctxMenu.for.canToggle && ctxAction('toggle')">
+      <span class="rc-ic">{{ ctxMenu.for.enabled ? '⊘' : '✓' }}</span>{{ ctxMenu.for.enabled ? t('ctxmenu.disable') : t('ctxmenu.enable') }}
+    </div>
+  </div>
+
+  <!-- 系统项二次确认 / Confirm modal for system items -->
+  <div v-if="confirm.show" class="modal-mask" @click.self="confirm.show=false">
+    <div class="modal">
+      <div class="title">{{ confirm.title }}</div>
+      <div class="desc" v-html="confirm.desc"></div>
+      <div class="actions">
+        <button class="btn" @click="confirm.show=false">{{ t('common.cancel') }}</button>
+        <button class="btn danger" @click="confirmYes">{{ t('common.confirm') }}</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- toast / Toast -->
+  <div v-if="toast.msg" class="toast" :class="{err: toast.kind==='err', ok: toast.kind==='ok'}">{{ toast.msg }}</div>
+</div>
+
+<script>
+// ============================================================
+//  i18n 字典：zh-CN（简）/ zh-TW（繁）/ en（英）。
+//  后端给英文 key，前端字典翻译。三档结构镜像，缺键显示原始 key。
+//  i18n dictionaries — back-end returns english keys, front-end translates.
+// ============================================================
+const i18n = {
+  'zh-CN': {
+    brand:{ zh:'鼠标右键主理人', en:'Context Menu Master' },
+    nav:{ editor:'菜单编辑', win11:'Windows 11 专区', about:'关于' },
+    status:{ classic:'经典菜单', modern:'新版菜单' },
+    theme:{ system:'跟随系统', light:'浅色', dark:'深色', preview_scope:'预览菜单主题' },
+    scene:{
+      desktop:'桌面空白', file:'文件', folder:'文件夹',
+      folder_bg:'文件夹空白', drive:'驱动器', recycle:'回收站',
+    },
+    editor:{
+      slogan:'可视化与列表双视图实时同步。点名称改名、点图标换图标，列表里批量勾选管理。所有改动只写当前用户注册表（HKCU），随时可逆。',
+      view_visual:'可视化视图', view_list:'列表视图',
+      cap_win11:'新版菜单（默认）', cap_classic:'经典菜单（显示更多选项）',
+      expands_to:'展开为',
+      refresh:'重新扫描', backup:'手动备份',
+      loading:'正在从注册表读取真实菜单项…',
+      empty:'该场景下未发现可管理的菜单项。',
+      click_rename:'点击改名', rename_locked:'此项不支持改名（COM 扩展由 DLL 运行时决定名字）',
+      change_icon:'点击换图标', icon_locked:'此项不支持换图标',
+      system_item:'系统内置项（改动会有二次确认）',
+      visual_hint:'左为 Windows 11 新版菜单（系统管控，仅预览不可改），点「显示更多选项」展开为右侧经典菜单 · 经典菜单可点名称改名、点图标换图标，右键单击可改名 / 换图标 / 启停',
+      icon_source_label:'图标源（dll,-id 或 .ico 路径）',
+      icon_source_ph:'如 imageres.dll,-5350 或 C:\\\\Windows\\\\xxx.ico',
+      icon_fallback_label:'兜底字符（找不到图标时显示）',
+      modern_readonly:'只读',
+      modern_readonly_tip:'新版菜单由系统管控，只接纳系统内建命令与带包标识的扩展，注册表改不动，此处仅预览',
+      submenu_empty:'（此折叠组下无子项）',
+      item_disabled:'此项当前为禁用状态',
+    },
+    modern:{
+      view:'查看', sort_by:'排序方式', refresh:'刷新', new:'新建',
+      open:'打开', open_with:'打开方式', compress:'压缩为',
+      empty_recycle:'清空回收站',
+    },
+    magic:{
+      title:'批量魔法：', placeholder:'输入要追加的后缀',
+      selected:'已选 {n} 项', apply:'一键追加',
+    },
+    list:{ icon:'图标', name:'菜单名称', source:'来源', enabled:'启用', actions:'操作', rename:'改名', icon_btn:'图标' },
+    ctxmenu:{ enable:'启用此项', disable:'停用此项' },
+    source:{ verb:'明文项', com:'COM 扩展' },
+    win11:{
+      slogan:'Windows 11 把传统右键菜单折叠进了「显示更多选项」。在这里一键找回完整经典菜单。',
+      classic_title:'经典 / 新版右键菜单', now_classic:'当前：经典菜单', now_modern:'当前：新版菜单',
+      classic_desc:'仅写入当前用户注册表（HKCU），无需管理员权限，随时可逆。',
+      action_title:'一键互换', action_desc:'切换后会优雅重启资源管理器，桌面与任务栏会闪一下，菜单瞬间生效，无需注销重登。',
+      toggle:'经典 ⇄ 新版 互换', enable:'切到经典菜单', restore:'恢复新版菜单', refresh:'刷新状态',
+      warn:'提示：操作会短暂重启 explorer.exe（桌面/任务栏会闪一下），属正常现象。',
+      sparse_section:'新版菜单扩展', sparse_title:'Win11 IExplorerCommand 稀疏包扫描',
+      sparse_desc:'扫描并接管 Windows 11 新版菜单里由稀疏包（MSIX）注册的 IExplorerCommand 扩展项。接口已预留，开发中。',
+      coming_soon:'开发中',
+      show_more:'显示更多选项',
+      tool_cut:'剪切', tool_copy:'复制', tool_paste:'粘贴', tool_rename:'重命名', tool_share:'共享', tool_delete:'删除', tool_properties:'属性',
+    },
+    about:{
+      body:'在 Windows 11 上重新主理你的鼠标右键菜单。可视化编辑、批量管理、一键找回经典菜单。<br>纯本地运行，只改当前用户注册表，随时可逆。',
+      tech_title:'技术栈',
+      tech_body:'现代 C++17 + Win32 API 后端，Microsoft Edge WebView2 承载界面，FairyGlass 液态玻璃皮肤。',
+      info_title:'作者与版本',
+      author_label:'作者', version_label:'版本', license_label:'协议', repo_label:'项目主页',
+      author_value:'恒烈 / Henglie',
+    },
+    common:{ cancel:'取消', confirm:'确认', apply:'应用', ok:'好的' },
+    confirm:{
+      sys_rename_title:'修改系统内置菜单项的名称？',
+      sys_rename_desc:'你正要改名的「<span class="strong">{name}</span>」是系统内置项。改名仅写入当前用户注册表（HKCU），不会影响其他用户，随时可恢复。已为你自动备份原始注册表。',
+      sys_disable_title:'停用系统内置菜单项？',
+      sys_disable_desc:'即将停用「<span class="strong">{name}</span>」。停用仅在当前用户生效，可随时打开。已为你自动备份原始注册表。',
+      sys_icon_title:'更换系统内置菜单项的图标？',
+      sys_icon_desc:'即将给「<span class="strong">{name}</span>」更换图标。仅写入当前用户注册表，可随时恢复。已为你自动备份原始注册表。',
+    },
+    toast:{
+      ok:'操作成功，菜单已生效', already_done:'已是目标状态，无需改动',
+      registry_failed:'注册表写入失败', refresh_failed:'已改注册表但刷新失败，重新登录后生效',
+      magic_done:'已为 {n} 项追加后缀', magic_empty:'请先勾选要处理的菜单项',
+      backup_done:'已自动备份到本地：{path}', backup_failed:'备份失败',
+      cannot_rename:'此项不支持改名',
+      cannot_change_icon:'此项不支持换图标',
+      cannot_toggle:'此项不支持启停',
+      bad_scene:'场景无效', empty_label:'名字不能为空',
+      auto_backed_up:'已自动备份原始注册表',
+      load_failed:'读取注册表失败',
+    },
+  },
+  'zh-TW': {
+    brand:{ zh:'滑鼠右鍵主理人', en:'Context Menu Master' },
+    nav:{ editor:'選單編輯', win11:'Windows 11 專區', about:'關於' },
+    status:{ classic:'經典選單', modern:'新版選單' },
+    theme:{ system:'跟隨系統', light:'淺色', dark:'深色', preview_scope:'預覽選單主題' },
+    scene:{
+      desktop:'桌面空白', file:'檔案', folder:'資料夾',
+      folder_bg:'資料夾空白', drive:'磁碟機', recycle:'資源回收筒',
+    },
+    editor:{
+      slogan:'視覺化與清單雙檢視即時同步。點名稱改名、點圖示換圖示，清單裡批次勾選管理。所有變更只寫目前使用者登錄檔（HKCU），隨時可逆。',
+      view_visual:'視覺化檢視', view_list:'清單檢視',
+      cap_win11:'新版選單（預設）', cap_classic:'經典選單（顯示更多選項）',
+      expands_to:'展開為',
+      refresh:'重新掃描', backup:'手動備份',
+      loading:'正在從登錄檔讀取真實選單項…',
+      empty:'此場景下未發現可管理的選單項。',
+      click_rename:'點擊改名', rename_locked:'此項不支援改名（COM 擴充由 DLL 執行時決定名字）',
+      change_icon:'點擊換圖示', icon_locked:'此項不支援換圖示',
+      system_item:'系統內建項（變更會有二次確認）',
+      visual_hint:'左為 Windows 11 新版選單（系統管控，僅預覽不可改），按「顯示更多選項」展開為右側經典選單 · 經典選單可點名稱改名、點圖示換圖示，右鍵點擊可改名 / 換圖示 / 啟停',
+      icon_source_label:'圖示來源（dll,-id 或 .ico 路徑）',
+      icon_source_ph:'如 imageres.dll,-5350 或 C:\\\\Windows\\\\xxx.ico',
+      icon_fallback_label:'備援字元（找不到圖示時顯示）',
+      modern_readonly:'唯讀',
+      modern_readonly_tip:'新版選單由系統管控，只接納系統內建命令與帶套件標識的擴充，登錄檔改不動，此處僅預覽',
+      submenu_empty:'（此摺疊組下無子項）',
+      item_disabled:'此項目前為停用狀態',
+    },
+    modern:{
+      view:'檢視', sort_by:'排序方式', refresh:'重新整理', new:'新增',
+      open:'開啟', open_with:'開啟方式', compress:'壓縮為',
+      empty_recycle:'清空資源回收筒',
+    },
+    magic:{
+      title:'批次魔法：', placeholder:'輸入要追加的後綴',
+      selected:'已選 {n} 項', apply:'一鍵追加',
+    },
+    list:{ icon:'圖示', name:'選單名稱', source:'來源', enabled:'啟用', actions:'操作', rename:'改名', icon_btn:'圖示' },
+    ctxmenu:{ enable:'啟用此項', disable:'停用此項' },
+    source:{ verb:'明文項', com:'COM 擴充' },
+    win11:{
+      slogan:'Windows 11 把傳統右鍵選單摺疊進了「顯示更多選項」。在這裡一鍵找回完整經典選單。',
+      classic_title:'經典 / 新版右鍵選單', now_classic:'目前：經典選單', now_modern:'目前：新版選單',
+      classic_desc:'僅寫入目前使用者登錄檔（HKCU），無需系統管理員權限，隨時可逆。',
+      action_title:'一鍵互換', action_desc:'切換後會優雅重新啟動檔案總管，桌面與工作列會閃一下，選單瞬間生效，無需登出重登。',
+      toggle:'經典 ⇄ 新版 互換', enable:'切到經典選單', restore:'還原新版選單', refresh:'重新整理狀態',
+      warn:'提示：操作會短暫重新啟動 explorer.exe（桌面/工作列會閃一下），屬正常現象。',
+      sparse_section:'新版選單擴充', sparse_title:'Win11 IExplorerCommand 稀疏套件掃描',
+      sparse_desc:'掃描並接管 Windows 11 新版選單裡由稀疏套件（MSIX）註冊的 IExplorerCommand 擴充項。介面已預留，開發中。',
+      coming_soon:'開發中',
+      show_more:'顯示更多選項',
+      tool_cut:'剪下', tool_copy:'複製', tool_paste:'貼上', tool_rename:'重新命名', tool_share:'共用', tool_delete:'刪除', tool_properties:'內容',
+    },
+    about:{
+      body:'在 Windows 11 上重新主理你的滑鼠右鍵選單。視覺化編輯、批次管理、一鍵找回經典選單。<br>純本機執行，只改目前使用者登錄檔，隨時可逆。',
+      tech_title:'技術棧',
+      tech_body:'現代 C++17 + Win32 API 後端，Microsoft Edge WebView2 承載介面，FairyGlass 液態玻璃面板。',
+      info_title:'作者與版本',
+      author_label:'作者', version_label:'版本', license_label:'授權', repo_label:'專案首頁',
+      author_value:'恒烈 / Henglie',
+    },
+    common:{ cancel:'取消', confirm:'確認', apply:'套用', ok:'好的' },
+    confirm:{
+      sys_rename_title:'修改系統內建選單項的名稱？',
+      sys_rename_desc:'你正要改名的「<span class="strong">{name}</span>」是系統內建項。改名僅寫入目前使用者登錄檔（HKCU），不會影響其他使用者，隨時可恢復。已為你自動備份原始登錄檔。',
+      sys_disable_title:'停用系統內建選單項？',
+      sys_disable_desc:'即將停用「<span class="strong">{name}</span>」。停用僅在目前使用者生效，可隨時開啟。已為你自動備份原始登錄檔。',
+      sys_icon_title:'更換系統內建選單項的圖示？',
+      sys_icon_desc:'即將給「<span class="strong">{name}</span>」更換圖示。僅寫入目前使用者登錄檔，可隨時恢復。已為你自動備份原始登錄檔。',
+    },
+    toast:{
+      ok:'操作成功，選單已生效', already_done:'已是目標狀態，無需變更',
+      registry_failed:'登錄檔寫入失敗', refresh_failed:'已改登錄檔但重新整理失敗，重新登入後生效',
+      magic_done:'已為 {n} 項追加後綴', magic_empty:'請先勾選要處理的選單項',
+      backup_done:'已自動備份到本機：{path}', backup_failed:'備份失敗',
+      cannot_rename:'此項不支援改名',
+      cannot_change_icon:'此項不支援換圖示',
+      cannot_toggle:'此項不支援啟停',
+      bad_scene:'場景無效', empty_label:'名字不能為空',
+      auto_backed_up:'已自動備份原始登錄檔',
+      load_failed:'讀取登錄檔失敗',
+    },
+  },
+  'en': {
+    brand:{ zh:'Context Menu Master', en:'Context Menu Master' },
+    nav:{ editor:'Menu Editor', win11:'Windows 11 Zone', about:'About' },
+    status:{ classic:'Classic menu', modern:'New menu' },
+    theme:{ system:'System', light:'Light', dark:'Dark', preview_scope:'Preview menu theme' },
+    scene:{
+      desktop:'Desktop', file:'File', folder:'Folder',
+      folder_bg:'Folder bg', drive:'Drive', recycle:'Recycle Bin',
+    },
+    editor:{
+      slogan:'Visual and list views stay in sync. Click a name to rename, click an icon to change it; batch-manage in the list. All changes go to the current-user registry (HKCU) and are fully reversible.',
+      view_visual:'Visual view', view_list:'List view',
+      cap_win11:'New menu (default)', cap_classic:'Classic menu (Show more options)',
+      expands_to:'expands to',
+      refresh:'Rescan', backup:'Backup',
+      loading:'Reading real menu items from the registry…',
+      empty:'No manageable items in this scene.',
+      click_rename:'Click to rename', rename_locked:'Rename not supported (COM handler — name resolved by DLL at runtime)',
+      change_icon:'Click to change icon', icon_locked:'Icon change not supported for this item',
+      system_item:'System item (a confirm dialog will appear)',
+      visual_hint:'Left is the Windows 11 new menu (system-managed — preview only, not editable); "Show more options" expands into the classic menu on the right, where you can click a name to rename, click an icon to change it, or right-click a row to rename / change icon / enable-disable.',
+      icon_source_label:'Icon source (dll,-id or .ico path)',
+      icon_source_ph:'e.g. imageres.dll,-5350 or C:\\\\Windows\\\\xxx.ico',
+      icon_fallback_label:'Fallback glyph (shown when no real icon)',
+      modern_readonly:'Read-only',
+      modern_readonly_tip:'The new menu is system-managed — it only accepts built-in shell commands and package-identified extensions. The registry cannot touch it; this is preview only.',
+      submenu_empty:'(No items in this submenu group)',
+      item_disabled:'This item is disabled',
+    },
+    modern:{
+      view:'View', sort_by:'Sort by', refresh:'Refresh', new:'New',
+      open:'Open', open_with:'Open with', compress:'Compress to',
+      empty_recycle:'Empty Recycle Bin',
+    },
+    magic:{
+      title:'Batch Magic:', placeholder:'Suffix to append',
+      selected:'{n} selected', apply:'Append to all',
+    },
+    list:{ icon:'Icon', name:'Menu Item', source:'Source', enabled:'Enabled', actions:'Actions', rename:'Rename', icon_btn:'Icon' },
+    ctxmenu:{ enable:'Enable item', disable:'Disable item' },
+    source:{ verb:'Verb', com:'COM ext' },
+    win11:{
+      slogan:'Windows 11 hides the classic context menu behind "Show more options". Bring it back in one click.',
+      classic_title:'Classic / New Context Menu', now_classic:'Now: Classic menu', now_modern:'Now: New menu',
+      classic_desc:'Writes only to the current-user registry (HKCU). No admin rights, fully reversible.',
+      action_title:'One-Click Swap', action_desc:'After switching, Explorer restarts gracefully — the desktop and taskbar flash briefly and the menu takes effect instantly.',
+      toggle:'Swap Classic ⇄ New', enable:'Switch to Classic', restore:'Restore New Menu', refresh:'Refresh status',
+      warn:'Note: this briefly restarts explorer.exe (desktop/taskbar will flash). This is expected.',
+      sparse_section:'New Menu Extensions', sparse_title:'Win11 IExplorerCommand Sparse-Package Scan',
+      sparse_desc:'Scan and manage IExplorerCommand items registered via sparse (MSIX) packages in the Win11 new menu. Interface reserved, in development.',
+      coming_soon:'In development',
+      show_more:'Show more options',
+      tool_cut:'Cut', tool_copy:'Copy', tool_paste:'Paste', tool_rename:'Rename', tool_share:'Share', tool_delete:'Delete', tool_properties:'Properties',
+    },
+    about:{
+      body:'Take charge of your right-click menu on Windows 11. Visual editing, batch management, one-click classic-menu restore.<br>Runs fully local, touches only the current-user registry, fully reversible.',
+      tech_title:'Tech Stack',
+      tech_body:'Modern C++17 + Win32 API backend, Microsoft Edge WebView2 for the UI, FairyGlass liquid-glass skin.',
+      info_title:'Author & Version',
+      author_label:'Author', version_label:'Version', license_label:'License', repo_label:'Repository',
+      author_value:'Henglie',
+    },
+    common:{ cancel:'Cancel', confirm:'Confirm', apply:'Apply', ok:'OK' },
+    confirm:{
+      sys_rename_title:'Rename a system menu item?',
+      sys_rename_desc:'"<span class="strong">{name}</span>" is a system item. Renaming only writes to the current-user registry (HKCU); other users are unaffected. The original registry has been automatically backed up.',
+      sys_disable_title:'Disable a system menu item?',
+      sys_disable_desc:'About to disable "<span class="strong">{name}</span>". The change only applies to your account and can be reverted any time. The original registry has been automatically backed up.',
+      sys_icon_title:'Change the icon of a system item?',
+      sys_icon_desc:'About to change the icon of "<span class="strong">{name}</span>". Writes only to the current-user registry, fully reversible. The original registry has been automatically backed up.',
+    },
+    toast:{
+      ok:'Done — the menu is now in effect', already_done:'Already in the target state, no change needed',
+      registry_failed:'Registry write failed', refresh_failed:'Registry changed but refresh failed — applies after re-login',
+      magic_done:'Appended suffix to {n} item(s)', magic_empty:'Select some menu items first',
+      backup_done:'Backed up locally: {path}', backup_failed:'Backup failed',
+      cannot_rename:'This item does not support rename',
+      cannot_change_icon:'This item does not support icon change',
+      cannot_toggle:'This item does not support toggling',
+      bad_scene:'Invalid scene', empty_label:'Name cannot be empty',
+      auto_backed_up:'Original registry auto-backed up',
+      load_failed:'Failed to read registry',
+    },
+  },
+};
+
+// ============================================================
+//  Windows 内建项友好名映射（三语兜底）。
+//  后端已尽力从注册表解析真实 label，但有些 Windows 内建项注册表里只有
+//  裸键名（如 find / removeproperties）或英文 COM 描述（如 "Open With Context
+//  Menu Handler"），系统本身没给本地化中文名。这里按 id / label 兜底补一层。
+//  —— 只收录确属 Windows 内建的项；第三方扩展无法穷举，保持后端清洗后的原样。
+//  —— 后端不返回中文（i18n 红线），所以映射放前端，跟随当前语言。
+//
+//  Front-end localization fallback for Windows built-in items whose registry
+//  carries only a bare verb key or an English COM description (the OS ships no
+//  localized name). Keyed by lowercased verb id / handler label. Third-party
+//  extensions are left as the back-end cleaned them.
+// ============================================================
+const BUILTIN_NAMES = {
+  // —— 按 verb id（小写）匹配 / matched by lowercased verb id ——
+  verb: {
+    'find':             { 'zh-CN':'查找…',       'zh-TW':'尋找…',       en:'Find…' },
+    'explore':          { 'zh-CN':'展开',         'zh-TW':'展開',        en:'Explore' },
+    'removeproperties': { 'zh-CN':'删除属性和个人信息', 'zh-TW':'移除內容和個人資訊', en:'Remove Properties' },
+    'pintohome':        { 'zh-CN':'固定到快速访问', 'zh-TW':'釘選到快速存取', en:'Pin to Quick access' },
+  },
+  // —— 按后端清洗后的 label（小写）匹配 handler / matched by lowercased handler label ——
+  handler: {
+    'open with context menu handler': { 'zh-CN':'打开方式',       'zh-TW':'開啟方式',       en:'Open with' },
+    'shell extensions for sharing':   { 'zh-CN':'共享',           'zh-TW':'共用',           en:'Share' },
+    'work folders context menu handler': { 'zh-CN':'工作文件夹',  'zh-TW':'工作資料夾',     en:'Work Folders' },
+    'taskband pin':                   { 'zh-CN':'固定到任务栏',   'zh-TW':'釘選到工作列',   en:'Pin to taskbar' },
+    'start menu pin':                 { 'zh-CN':'固定到「开始」屏幕', 'zh-TW':'釘選到開始畫面', en:'Pin to Start' },
+    'previous versions property page':{ 'zh-CN':'以前的版本',     'zh-TW':'以前的版本',     en:'Restore previous versions' },
+    'new menu handler':               { 'zh-CN':'新建',           'zh-TW':'新增',           en:'New' },
+    'offline files':                  { 'zh-CN':'脱机文件',       'zh-TW':'離線檔案',       en:'Offline Files' },
+    'enhanced storage context menu handler': { 'zh-CN':'增强型存储', 'zh-TW':'增強型存放區', en:'Enhanced Storage' },
+    'shellfolder for cd burning':     { 'zh-CN':'刻录到光盘',     'zh-TW':'燒錄到光碟',     en:'Burn to disc' },
+    'encryption context menu':        { 'zh-CN':'加密',           'zh-TW':'加密',           en:'Encrypt' },
+    // —— 第三方 COM 扩展（IContextMenu）：注册表只有 CLSID + DLL，子项/文字由 DLL
+    //    运行时 QueryContextMenu 动态生成，静态扫描读不到。这里给已知的常见扩展兜个
+    //    本地化友好名，至少不显示英文 COM 描述。第三方无法穷举，按需补行。——
+    'quark ai context menu':          { 'zh-CN':'夸克AI',          'zh-TW':'夸克AI',          en:'Quark AI' },
+  },
+};
+
+const { createApp } = Vue;
+
+const app = createApp({
+  data() {
+    return {
+      // 语言 / Language. 优先 C++ 注入的 window.__CMM_LANG__，其次 localStorage，最后 en。
+      lang: 'en',
+      langs: [
+        { code:'zh-CN', name:'简体中文' },
+        { code:'zh-TW', name:'繁體中文' },
+        { code:'en',    name:'English' },
+      ],
+      showLang: false,
+
+      // 主题：三态 system / light / dark，存 localStorage。
+      // Theme tri-state, persisted in localStorage.
+      themeMode: 'system',
+      themeModes: [
+        { code:'system', glyph:'◐' },
+        { code:'light',  glyph:'☀' },
+        { code:'dark',   glyph:'☾' },
+      ],
+      showTheme: false,
+      _mqlDark: null,
+
+      tab: 'editor',
+      // 版本号与 CMake project(VERSION) 保持一致；页脚与关于页共用。
+      appVersion: '0.1.0',
+      repoUrl: 'https://github.com/Henglie/ContextMenuMaster',
+      navItems: [
+        { key:'editor', ic:'▤' },
+        { key:'win11',  ic:'⊞' },
+        { key:'about',  ic:'◔' },
+      ],
+
+      // 6 场景 / 6 scenes —— 后端 sceneId 与此一一对应。
+      scenes: [
+        { id:'desktop',   glyph:'▦' },
+        { id:'file',      glyph:'▤' },
+        { id:'folder',    glyph:'▣' },
+        { id:'folder_bg', glyph:'▢' },
+        { id:'drive',     glyph:'◫' },
+        { id:'recycle',   glyph:'⌫' },
+      ],
+      scene: 'desktop',
+      sceneCounts: {},        // { sceneId: 项数 } —— tab 角标 / count badge per scene tab
+
+      view: 'visual',          // visual（可视化双菜单并排）/ list（列表）
+      items: [],               // 当前场景的菜单项（含 _checked / icon 临时字段）
+      loading: false,
+      busy: false,
+
+      // 编辑状态。editPanel 区分同一项在哪张菜单上点开编辑（win11/classic），
+      // 否则两张菜单的同一行会同时弹出输入框。
+      editId: null, editBuf: '', editPanel: null,
+      _editRef: null,
+
+      // 图标浮层
+      glyphPickFor: null,
+      glyphPickStyle: {},
+      glyphSourceBuf: '',
+
+      // 可视化视图行右键操作菜单（改名/换图标/启停）。
+      // Right-click action menu for visual rows.
+      ctxMenu: { for:null },
+      ctxMenuStyle: {},
+      glyphChoices: ['▤','✂','⧉','▥','⌦','✎','⚙','★','◆','▶','⤓','↗','⌕','⚿','⬆','⬇','＋','✦','♥','◉','◯','◍','■','□','▲','△','▼','▽','○','●','◇','◈'],
+
+      magicSuffix: '',
+      magicPresets: [' 喵~', ' ★', ' (新)'],
+
+      menuStatus: { classic: false },
+
+      toast: { msg:'', kind:'' }, _toastTimer:null,
+      confirm: { show:false, title:'', desc:'', onYes:null },
+    };
+  },
+  computed: {
+    langLabel() { return (this.langs.find(l => l.code===this.lang) || {}).name || 'English'; },
+    themeLabel() {
+      const m = this.themeModes.find(x => x.code===this.themeMode);
+      return m ? (m.glyph + ' ' + this.t('theme.'+m.code)) : '';
+    },
+    // 仅 file/folder/drive 显示顶部小工具栏；桌面空白/文件夹空白/回收站不显示。
+    // Top mini toolbar shows only on object scenes (file/folder/drive).
+    showCtxToolbar() {
+      return this.scene==='file' || this.scene==='folder' || this.scene==='drive';
+    },
+    // WYSIWYG 里显示的项：先 verb 再 handler，handler 前自动加分隔线（视觉上靠近真实 Win11）。
+    // visibleItems used by WYSIWYG: keep order, separator is implicit in markup.
+    visibleItems() { return this.items; },
+
+    // 现代菜单（Win11 新菜单）只读示意项。**关键事实**：现代菜单只枚举 shell 内建命令
+    // + 云提供程序命令 + 满足 IExplorerCommand 且有包标识（稀疏包/MSIX）的扩展；
+    // 传统注册表项（shell\verb、shellex\ContextMenuHandlers）进不了现代菜单，
+    // 一律降级到「显示更多选项」里的经典菜单。所以这里**绝不渲染 this.items 那些扫描项**，
+    // 只摆 shell 内建项做示意，并且全部不可编辑（注册表碰不到现代菜单层）。
+    // Modern (Win11) menu is read-only preview: only shell built-ins are shown.
+    // Registry-based items can't enter it — they live in the classic menu.
+    modernMenuItems() {
+      const isObj = this.scene==='file' || this.scene==='folder' || this.scene==='drive';
+      const mk = (labelKey, glyph, shortcut, chev) => ({
+        id: 'modern_'+labelKey, label: this.t(labelKey), glyph, shortcut: shortcut||'', chev: !!chev,
+      });
+      // 桌面空白 / 文件夹空白：shell 内建那几项；对象场景：打开/打开方式 + 属性。
+      if (this.scene==='desktop' || this.scene==='folder_bg') {
+        return [
+          mk('modern.view', '▦', '', true),
+          mk('modern.sort_by', '↕', '', true),
+          mk('modern.refresh', '↻', ''),
+          mk('modern.new', '＋', '', true),
+        ];
+      }
+      if (this.scene==='recycle') {
+        return [ mk('modern.open', '▸', ''), mk('modern.empty_recycle', '⌫', '') ];
+      }
+      // file / folder / drive
+      const list = [ mk('modern.open', '▸', '') ];
+      if (this.scene==='file') list.push(mk('modern.open_with', '▷', '', true));
+      list.push(mk('modern.compress', '▤', ''));
+      return list;
+    },
+
+    // 系统硬编码菜单项（剪切/复制/粘贴/属性 等）——不在注册表 verb 里，是 shell 内建，
+    // 纯展示用，不可改名/不可启停。按场景返回 {top, bottom} 两组，渲染时拼进真实扫描项
+    // 的正确位置：object 场景（file/folder/drive）顶部放剪切/复制/粘贴，底部放属性。
+    // 这两组同时给现代菜单（顶部工具条对应 top、底部属性对应 bottom）和经典菜单用。
+    // System built-in menu items (Cut/Copy/Paste/Properties ...) are shell
+    // internal, not in the registry. Display-only, not editable/toggleable.
+    systemFixedItems() {
+      const isObj = this.scene==='file' || this.scene==='folder' || this.scene==='drive';
+      if (!isObj) return { top:[], bottom:[] };
+      const mk = (id, labelKey, glyph, shortcut) => ({
+        id, label: this.t(labelKey), glyph, shortcut,
+        system: true, fixed: true,        // fixed = 纯展示，前端拦下不让编辑
+        canRename: false, canChangeIcon: false, canToggle: false,
+        enabled: true, kind: 'fixed',
+      });
+      return {
+        top: [
+          mk('sys_cut',  'win11.tool_cut',  '✂', 'Ctrl+X'),
+          mk('sys_copy', 'win11.tool_copy', '⧉', 'Ctrl+C'),
+          mk('sys_paste','win11.tool_paste','⎘', 'Ctrl+V'),
+        ],
+        bottom: [
+          mk('sys_properties', 'win11.tool_properties', 'ℹ', 'Alt+Enter'),
+        ],
+      };
+    },
+
+    selectedCount() { return this.items.filter(i => i._checked).length; },
+    allChecked() {
+      return this.items.length > 0 && this.items.every(i => i._checked);
+    },
+  },
+  watch: {
+    lang() { document.documentElement.lang = this.lang; },
+  },
+  mounted() {
+    this.initLang();
+    this.initTheme();
+    this.refreshStatus();
+    this.loadScene(this.scene);
+    // 后台异步把所有场景的数量也带回来，给 tab 角标用。
+    this.$nextTick(() => this.prefetchCounts());
+    document.addEventListener('click', () => this.closePopovers());
+  },
+  beforeUnmount() {
+    if (this._mqlDark && this._mqlDark.removeEventListener) {
+      this._mqlDark.removeEventListener('change', this._onSysThemeChange);
+    }
+  },
+  methods: {
+    // —— i18n —— 点路径取值 + {arg} 占位替换；缺键返回原 key 便于发现漏翻。
+    t(key, args) {
+      const keys = key.split('.');
+      let str = i18n[this.lang] || i18n['en'];
+      for (const k of keys) str = str?.[k];
+      str = (str == null) ? key : str;
+      if (args && typeof str === 'string') {
+        Object.keys(args).forEach(k => {
+          str = str.replace(new RegExp('\\{'+k+'\\}','g'), args[k]);
+        });
+      }
+      return str;
+    },
+    // —— 打开项目主页 —— WebView2 里 <a target=_blank> 不会拉起系统浏览器，
+    // 交给后端 open_url（ShellExecuteW，仅放行 https）。
+    async openRepo() {
+      try {
+        if (window.open_url) await window.open_url(this.repoUrl);
+      } catch (e) { /* 静默：打不开不影响主功能 */ }
+    },
+    initLang() {
+      const saved = localStorage.getItem('cmm_lang');
+      const injected = window.__CMM_LANG__;
+      let lang = saved || injected || 'en';
+      if (!i18n[lang]) lang = 'en';
+      this.lang = lang;
+      document.documentElement.lang = lang;
+    },
+    setLang(code) {
+      this.lang = code; this.showLang = false;
+      localStorage.setItem('cmm_lang', code);
+    },
+
+    // —— 主题 —— 三态：system 时跟随系统 prefers-color-scheme；
+    //              light/dark 时显式覆盖并停止跟随。
+    // Theme: system mode follows OS prefers-color-scheme; light/dark overrides explicitly.
+    initTheme() {
+      const saved = localStorage.getItem('cmm_theme');
+      this.themeMode = (saved === 'light' || saved === 'dark' || saved === 'system') ? saved : 'system';
+      this._mqlDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+      this._onSysThemeChange = () => { if (this.themeMode === 'system') this.applyTheme(); };
+      if (this._mqlDark && this._mqlDark.addEventListener) {
+        this._mqlDark.addEventListener('change', this._onSysThemeChange);
+      }
+      this.applyTheme();
+    },
+    setTheme(mode) {
+      this.themeMode = mode; this.showTheme = false;
+      localStorage.setItem('cmm_theme', mode);
+      this.applyTheme();
+    },
+    applyTheme() {
+      let effective = this.themeMode;
+      if (effective === 'system') {
+        effective = (this._mqlDark && this._mqlDark.matches) ? 'dark' : 'light';
+      }
+      // ⚠ 主题切换只作用于预览菜单（.ctx-menu / .ctx-menu-classic），
+      // UI 外壳固定暗色玻璃令牌不参与切换 —— 作者的玻璃 UI 本就是深浅一体化设计，
+      // 不该跟着系统明暗变。改 data-preview-theme 而非 data-theme。
+      // Theme switch only affects the preview menu; the glass UI shell stays dark.
+      document.documentElement.setAttribute('data-preview-theme', effective);
+    },
+
+    closePopovers() {
+      this.showLang = false;
+      this.showTheme = false;
+      this.glyphPickFor = null;
+      this.ctxMenu = { for: null };
+    },
+
+    // —— 场景切换 —— 切到新场景就重新拉取真实数据。
+    setScene(id) {
+      if (this.scene === id) return;
+      this.scene = id;
+      this.editId = null; this.glyphPickFor = null;
+      this.loadScene(id);
+    },
+    async reloadScene() { await this.loadScene(this.scene); },
+
+    // 从后端 scan_scene 拿真实菜单项。bind 返回值已是数组（踩坑 1：勿 JSON.parse）。
+    // Pull real items from scan_scene. Bind already returns the array — no JSON.parse.
+    async loadScene(id) {
+      this.loading = true; this.items = [];
+      try {
+        if (!window.scan_scene) {
+          // 浏览器直接打开（无后端）：留空，列表显示「无项目」即可。
+          this.items = []; this.sceneCounts[id] = 0;
+          return;
+        }
+        const arr = await window.scan_scene(id);
+        const list = Array.isArray(arr) ? arr : [];
+        // 给每项补前端用的临时字段（不污染后端契约）。
+        for (const it of list) {
+          it._checked = false;
+          it.icon = '';   // 真实 PNG data URI，extract_icon 拿到后填
+        }
+        this.items = list;
+        this.sceneCounts[id] = list.length;
+        // 后台异步把图标都取一遍。
+        this.loadIcons(list);
+        // 后台异步探测 handler 项（如 7-Zip / 百度云）的真实动态子菜单。
+        this.probeHandlers(list, id);
+      } catch (e) {
+        this.showToast(this.t('toast.load_failed') + ' (' + e + ')', 'err');
+      } finally {
+        this.loading = false;
+      }
+    },
+    // 异步探测 handler 项（IContextMenu COM 扩展，如 7-Zip / 百度云）的真实动态
+    // 子菜单。这些项的折叠形态、子项、本地化文字全是 DLL 运行时 QueryContextMenu
+    // 生成的，注册表静态读不到——后端 probe_handler_menu 通过 CmmCli 子进程实例化
+    // 扩展把真实菜单「跑」出来（崩溃隔离）。拿到非空 items 就把该项当折叠菜单渲染。
+    // 探测会加载第三方 DLL，逐个串行、失败静默，绝不影响主流程。
+    // listSnapshotId 防串场景：探测期间用户切了场景就丢弃结果。
+    async probeHandlers(list, listSnapshotId) {
+      if (!window.probe_handler_menu) return;
+      for (const it of list) {
+        if (it.kind !== 'handler' || !it.clsid) continue;
+        try {
+          const r = await window.probe_handler_menu(this.scene, it.clsid);
+          // 切场景了就别再往旧 list 写。
+          if (this.scene !== listSnapshotId) return;
+          if (r && r.ok && Array.isArray(r.items) && r.items.length) {
+            // 真实菜单可能是「单个折叠父项 + children」也可能是「平铺几项」。
+            // 若只有一个带 children 的父项，直接把它的子树挂到 it；否则把整组
+            // items 当作 it 的子菜单（it 自己作折叠父项）。
+            const top = r.items.filter(x => !x.separator);
+            if (top.length === 1 && top[0].children && top[0].children.length) {
+              it.children = this.normalizeProbed(top[0].children);
+              if (top[0].label) it.label = top[0].label;
+            } else {
+              it.children = this.normalizeProbed(r.items);
+            }
+            it.hasSubmenu = it.children.length > 0;
+          }
+        } catch (e) { /* 探测失败静默，保留静态 label */ }
+      }
+    },
+    // 把 probe 返回的菜单节点规整成前端渲染用的结构（递归）。探测项一律只读。
+    normalizeProbed(nodes) {
+      const out = [];
+      let sepRun = 0;
+      for (const n of (nodes || [])) {
+        if (n.separator) { sepRun++; continue; }
+        if (!n.label && !(n.children && n.children.length)) continue; // 跳空/owner-draw 占位
+        out.push({
+          id: 'probed:' + out.length + ':' + (n.label || ''),
+          kind: 'probed',
+          label: n.label || '',
+          shortcut: n.shortcut || '',
+          disabled: !!n.disabled,
+          enabled: !n.disabled,
+          icon: '',
+          system: false, canRename: false, canChangeIcon: false, canToggle: false,
+          hasSubmenu: !!(n.children && n.children.length),
+          children: (n.children && n.children.length) ? this.normalizeProbed(n.children) : [],
+        });
+        sepRun = 0;
+      }
+      return out;
+    },
+    // 异步把每项的 iconSource 喂给 extract_icon，拿到 data URI 就显示真图标；
+    // 拿不到回落字符（绝不出 emoji）。失败静默——visibleItems 默认渲染 fallback。
+    async loadIcons(list) {
+      if (!window.extract_icon) return;
+      for (const it of list) {
+        if (!it.iconSource) continue;
+        try {
+          const uri = await window.extract_icon(it.iconSource);
+          if (uri && uri.indexOf('data:image') === 0) it.icon = uri;
+        } catch (e) { /* 静默 */ }
+      }
+    },
+    // 6 场景项数预取，给 tab 角标。仅在 web bind 可用时执行。
+    async prefetchCounts() {
+      if (!window.scan_scene) return;
+      for (const sc of this.scenes) {
+        if (sc.id === this.scene) continue;
+        try {
+          const arr = await window.scan_scene(sc.id);
+          this.sceneCounts[sc.id] = Array.isArray(arr) ? arr.length : 0;
+        } catch (e) { /* 忽略 */ }
+      }
+    },
+
+    // 助记符工具 / Accelerator helpers.
+    // 注册表 verb label 经常带 Win 助记符（如 "显示设置(&D)" / "&Open"）。
+    // stripAccel：剥掉显示（Win11 真实菜单不显示助记符下划线）。
+    // renderAccel：把 &X 渲染成 <u>X</u>（经典菜单风格），其余字符 HTML 转义。
+    // The registry verb labels often carry Win mnemonic markers like "显示设置(&D)" / "&Open".
+    // stripAccel removes them; renderAccel underlines the next character (classic-menu style).
+    stripAccel(s) {
+      if (s == null) return '';
+      let out = String(s);
+      out = out.replace(/\s*\(&[A-Za-z0-9]\)/g, '');
+      out = out.replace(/&([A-Za-z0-9])/g, '$1');
+      out = out.replace(/&&/g, '&');
+      return out;
+    },
+    renderAccel(s) {
+      if (s == null) return '';
+      const src = String(s);
+      let html = '';
+      for (let i = 0; i < src.length; i++) {
+        const c = src[i];
+        if (c === '&' && i + 1 < src.length) {
+          const n = src[i + 1];
+          if (n === '&') { html += '&amp;'; i++; continue; }
+          if (/[A-Za-z0-9]/.test(n)) {
+            html += '<u>' + this.escapeHtml(n) + '</u>';
+            i++;
+            continue;
+          }
+        }
+        html += this.escapeHtml(c);
+      }
+      return html;
+    },
+    // Windows 内建项友好名兜底：后端给的 label 是裸键名或英文 COM 描述时，
+    // 查 BUILTIN_NAMES 换成当前语言的本地化名。命中返回友好名，未命中返回 null。
+    // verb 按 id（小写）匹配；handler 按后端清洗后的 label（小写）匹配。
+    // Returns a localized name for known Windows built-ins, or null if not mapped.
+    friendlyName(it) {
+      const lang = this.lang;
+      if (it.kind === 'verb') {
+        const key = (it.id || '').toLowerCase();
+        const e = BUILTIN_NAMES.verb[key];
+        if (e) return e[lang] || e.en;
+      } else if (it.kind === 'handler') {
+        const key = (it.label || '').toLowerCase();
+        const e = BUILTIN_NAMES.handler[key];
+        if (e) return e[lang] || e.en;
+      }
+      return null;
+    },
+    // 显示名：handler 项的 id 是 "handler:xxx"，label 是注册表键名（一般是 CLSID 或 DLL 名）。
+    // 对 handler，去 "handler:" 前缀并截短显示。Win11 视图与列表视图都剥掉助记符。
+    // 先查 Windows 内建友好名映射，命中即用本地化名。
+    // Win11 view & list view strip mnemonic markers from the label.
+    displayLabel(it) {
+      const friendly = this.friendlyName(it);
+      if (friendly) return friendly;
+      let raw;
+      if (it.kind === 'handler' && (!it.label || it.label === it.id)) {
+        raw = it.id.replace(/^handler:/, '');
+      } else {
+        raw = it.label || it.id;
+      }
+      return this.stripAccel(raw);
+    },
+    // 经典视图 label 渲染：保留 &X 助记符并给字母加下划线（Win10/经典菜单视觉一致）。
+    // 友好名映射命中时不含助记符，直接 HTML 转义输出。
+    // Classic view label render: keep mnemonic and underline the accelerator character.
+    renderClassicLabel(it) {
+      const friendly = this.friendlyName(it);
+      if (friendly) return this.escapeHtml(friendly);
+      let raw;
+      if (it.kind === 'handler' && (!it.label || it.label === it.id)) {
+        raw = it.id.replace(/^handler:/, '');
+      } else {
+        raw = it.label || it.id;
+      }
+      return this.renderAccel(raw);
+    },
+    // 兜底字符：fixed 项用自己的 glyph；handler 多是 COM 扩展给 ▸；verb 给 ■。
+    // Fallback glyph: fixed items carry their own; handler -> ▸; verb -> ■.
+    fallbackGlyph(it) {
+      if (it.kind === 'fixed') return it.glyph || '■';
+      return it.kind === 'handler' ? '▸' : '■';
+    },
+
+    // —— 改名流程 —— 系统项要二次确认。
+    // Rename: confirm for system items.
+    setEditRef(el) {
+      if (el) { el.focus(); el.select(); this._editRef = el; }
+    },
+    startRename(it, panel) {
+      if (!it.canRename) {
+        this.showToast(this.t('toast.cannot_rename'), 'err');
+        return;
+      }
+      // panel 区分编辑态落在哪张菜单（win11 / classic），避免两张菜单同一 item
+      // 的输入框同时弹出。列表视图不传 panel，默认 'list'。
+      this.editPanel = panel || 'list';
+      this.editId = it.id; this.editBuf = it.label || '';
+    },
+    cancelRename() { this.editId = null; this.editBuf = ''; this.editPanel = null; },
+    async commitRename(it) {
+      // blur 也会触发本函数；如果 editId 已经被外部清掉就跳过。
+      if (this.editId !== it.id) return;
+      const newLabel = (this.editBuf || '').trim();
+      if (!newLabel) { this.editId = null; this.editPanel = null; return; }
+      if (newLabel === (it.label || '')) { this.editId = null; this.editPanel = null; return; }
+
+      const apply = async () => {
+        const r = await this.callBackend('rename_item', this.scene, it.id, newLabel);
+        if (r && r.ok) {
+          it.label = newLabel;
+          this.showToast(this.t('toast.auto_backed_up') + ' · ' + this.t('toast.ok'), 'ok');
+        } else {
+          this.showToast(this.t('toast.'+ (r?.key || 'registry_failed')), 'err');
+        }
+        this.editId = null; this.editPanel = null;
+      };
+
+      if (it.system) {
+        this.askConfirm(
+          this.t('confirm.sys_rename_title'),
+          this.t('confirm.sys_rename_desc', { name: this.escapeHtml(it.label || it.id) }),
+          apply,
+          () => { this.editId = null; this.editPanel = null; }
+        );
+      } else {
+        await apply();
+      }
+    },
+
+    // —— 启停流程 —— 系统项要二次确认。Toggle: confirm for system items.
+    askToggle(it) {
+      if (!it.canToggle) {
+        this.showToast(this.t('toast.cannot_toggle'), 'err');
+        return;
+      }
+      const next = !it.enabled;
+      const apply = async () => {
+        const r = await this.callBackend('set_item_enabled', this.scene, it.id, next);
+        if (r && r.ok) {
+          it.enabled = next;
+          this.showToast(this.t('toast.auto_backed_up') + ' · ' + this.t('toast.ok'), 'ok');
+        } else {
+          this.showToast(this.t('toast.'+ (r?.key || 'registry_failed')), 'err');
+        }
+      };
+      // 停用系统项要确认；启用则不必。
+      if (it.system && next === false) {
+        this.askConfirm(
+          this.t('confirm.sys_disable_title'),
+          this.t('confirm.sys_disable_desc', { name: this.escapeHtml(it.label || it.id) }),
+          apply
+        );
+      } else {
+        apply();
+      }
+    },
+
+    // —— 可视化视图行右键菜单 —— 把改名/换图标/启停收进右键，让可视化视图
+    //    与列表视图功能对齐（启停原本只在列表有）。复用既有方法。
+    // Right-click menu for visual rows: rename / change-icon / toggle, reusing
+    // the same methods the list view uses, so both views have parity.
+    openCtxMenu(it, ev) {
+      ev.preventDefault();
+      this.closePopovers();
+      this.ctxMenu = { for: it };
+      // 菜单宽 ~148，估高 ~96；贴近指针，超出视口右/下边就回收。
+      const w = 150, h = 100;
+      const left = Math.min(ev.clientX, window.innerWidth - w - 8);
+      const top = Math.min(ev.clientY, window.innerHeight - h - 8);
+      this.ctxMenuStyle = { left: left + 'px', top: top + 'px' };
+    },
+    ctxAction(kind) {
+      const it = this.ctxMenu.for;
+      if (!it) return;
+      this.ctxMenu = { for: null };
+      if (kind === 'rename') this.startRename(it, 'classic');
+      else if (kind === 'toggle') this.askToggle(it);
+      else if (kind === 'icon') {
+        // 图标浮层需要一个锚点元素定位；右键来的没有 currentTarget，
+        // 直接在右键落点附近弹出。
+        if (!it.canChangeIcon) { this.showToast(this.t('toast.cannot_change_icon'), 'err'); return; }
+        this.glyphPickFor = it;
+        this.glyphSourceBuf = it.iconSource || '';
+        const style = this.ctxMenuStyle || {};
+        const left = Math.min(parseInt(style.left) || 0, window.innerWidth - 300);
+        this.glyphPickStyle = { left: left + 'px', top: style.top || '120px' };
+      }
+    },
+
+    // —— 图标浮层 —— Icon popover.
+    openGlyphPick(it, ev) {
+      if (!it.canChangeIcon) {
+        this.showToast(this.t('toast.cannot_change_icon'), 'err');
+        return;
+      }
+      ev.stopPropagation();
+      this.glyphPickFor = it;
+      this.glyphSourceBuf = it.iconSource || '';
+      const r = ev.currentTarget.getBoundingClientRect();
+      // 弹在图标右下方，超出视口右侧时往左收。
+      const left = Math.min(r.left, window.innerWidth - 300);
+      this.glyphPickStyle = { left: left + 'px', top: (r.bottom + 6) + 'px' };
+    },
+    openGlyphPickFromList(it, ev) { this.openGlyphPick(it, ev); },
+    pickGlyph(g) {
+      if (!this.glyphPickFor) return;
+      // 用户直接挑字符 = 清掉 iconSource，让 fallback 字符显示。
+      this.glyphPickFor.icon = '';
+      this.glyphPickFor._glyphChosen = g;
+      // 注意：这里不写后端（前端字符兜底无法写注册表），关闭浮层即可。
+      // commitIcon 才会真写注册表（用 glyphSourceBuf）。
+      this.glyphPickFor = null;
+    },
+    async commitIcon() {
+      const it = this.glyphPickFor;
+      if (!it) return;
+      const src = (this.glyphSourceBuf || '').trim();
+      const doApply = async () => {
+        const r = await this.callBackend('set_item_icon', this.scene, it.id, src);
+        if (r && r.ok) {
+          it.iconSource = src;
+          // 立即拿新图标 data URI 刷新视觉。
+          if (src && window.extract_icon) {
+            try {
+              const uri = await window.extract_icon(src);
+              if (uri && uri.indexOf('data:image') === 0) it.icon = uri;
+              else it.icon = '';
+            } catch (e) { it.icon = ''; }
+          } else { it.icon = ''; }
+          this.showToast(this.t('toast.auto_backed_up') + ' · ' + this.t('toast.ok'), 'ok');
+        } else {
+          this.showToast(this.t('toast.'+ (r?.key || 'registry_failed')), 'err');
+        }
+        this.glyphPickFor = null;
+      };
+      if (it.system) {
+        this.askConfirm(
+          this.t('confirm.sys_icon_title'),
+          this.t('confirm.sys_icon_desc', { name: this.escapeHtml(it.label || it.id) }),
+          doApply
+        );
+      } else {
+        doApply();
+      }
+    },
+
+    // —— 批量魔法 —— Batch suffix magic.
+    toggleAll() {
+      const target = !this.allChecked;
+      this.items.forEach(i => i._checked = target);
+    },
+    async applyMagic() {
+      const sel = this.items.filter(i => i._checked && i.canRename);
+      if (!sel.length) { this.showToast(this.t('toast.magic_empty'), 'err'); return; }
+      const suffix = this.magicSuffix;
+      if (!suffix) return;
+      const ids = sel.map(i => i.id).join(',');
+      const r = await this.callBackend('batch_append_suffix', this.scene, ids, suffix);
+      if (r && r.ok) {
+        sel.forEach(i => { i.label = (i.label || '') + suffix; });
+        this.showToast(this.t('toast.magic_done', { n: sel.length }), 'ok');
+      } else {
+        this.showToast(this.t('toast.'+ (r?.key || 'registry_failed')), 'err');
+      }
+    },
+
+    // —— 手动备份当前场景。Backup current scene to .reg.
+    async backupCurrent() {
+      const r = await this.callBackend('backup_scene', this.scene);
+      if (r && r.ok) {
+        const p = r.path || '';
+        this.showToast(this.t('toast.backup_done', { path: p }), 'ok');
+      } else {
+        this.showToast(this.t('toast.backup_failed'), 'err');
+      }
+    },
+
+    // —— Win11 专区 —— Win11 zone.
+    async refreshStatus() {
+      if (!window.get_menu_status) return;
+      try {
+        const r = await window.get_menu_status();
+        this.menuStatus = r || { classic:false };
+      } catch (e) {}
+    },
+    doToggle() { return this.runMenuOp(window.toggle_classic_menu); },
+    doEnable() { return this.runMenuOp(window.enable_classic_menu); },
+    doRestore() { return this.runMenuOp(window.restore_new_menu); },
+    async runMenuOp(fn) {
+      if (!fn) { this.showToast('backend not available', 'err'); return; }
+      this.busy = true;
+      try {
+        const r = await fn();
+        this.showToast(this.t('toast.'+r.key), r.ok ? 'ok' : 'err');
+        await this.refreshStatus();
+      } catch (e) {
+        this.showToast(String(e), 'err');
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    // —— 通用：调后端 bind，统一锁 busy + 错误兜底。
+    // Generic backend bind invocation with busy lock & error fallback.
+    async callBackend(fn, ...args) {
+      if (!window[fn]) {
+        this.showToast('backend ' + fn + ' missing', 'err');
+        return { ok:false, key:'registry_failed' };
+      }
+      this.busy = true;
+      try {
+        return await window[fn](...args);
+      } catch (e) {
+        return { ok:false, key:'registry_failed' };
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    // —— 弹窗 —— Confirm modal.
+    askConfirm(title, desc, onYes, onNo) {
+      this.confirm = { show:true, title, desc, onYes, onNo };
+    },
+    confirmYes() {
+      const cb = this.confirm.onYes;
+      this.confirm.show = false;
+      if (typeof cb === 'function') cb();
+    },
+
+    // —— Toast —— 3 秒自动消失。
+    showToast(msg, kind='') {
+      this.toast = { msg, kind };
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => { this.toast = { msg:'', kind:'' }; }, 2800);
+    },
+
+    // 用于 v-html 时的 XSS 防护：弹窗描述里要插入 name 字段，做 HTML 转义。
+    // HTML-escape user-supplied names interpolated into v-html confirm descriptions.
+    escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    },
+  },
+});
+
+// ============================================================
+//  递归飞出子菜单组件 <ctx-flyout-node>。折叠（级联）菜单和 COM 探测出来的
+//  动态菜单都可能有任意深度的子菜单，用一个自引用组件统一渲染。
+//  纯只读：不绑改名/换图标/启停，悬停父项即向右飞出下一级。
+//  Recursive read-only flyout for cascading / probed submenus of any depth.
+// ============================================================
+app.component('ctx-flyout-node', {
+  name: 'ctx-flyout-node',
+  props: { item: { type: Object, required: true } },
+  // label 渲染：probed 项的 label 已是最终文字（不含助记符），verb 级联子项仍可能
+  // 带 &X 助记符。统一交给根实例的 renderClassicLabel（probed 项 kind 非 verb/handler，
+  // friendlyName 不命中、renderAccel 对无 & 文字也安全）。
+  template: `
+    <div class="ctx-classic-row" :class="{ disabled: item.enabled===false }"
+         :title="item.disabled ? $root.t('editor.item_disabled') : ''">
+      <span class="glyph">
+        <img v-if="item.icon" :src="item.icon" class="glyph-img" alt="" draggable="false" />
+        <span v-else>{{ $root.fallbackGlyph(item) }}</span>
+      </span>
+      <span class="label" v-html="$root.renderClassicLabel(item)"></span>
+      <span class="right">
+        <span v-if="item.shortcut" class="shortcut">{{ item.shortcut }}</span>
+        <span v-if="item.hasSubmenu" class="sub-arrow">▶</span>
+      </span>
+      <!-- 下一级飞出（任意深度递归）/ next-level flyout (recurse) -->
+      <div v-if="item.hasSubmenu" class="ctx-flyout classic ctx-flyout-deep">
+        <div v-if="!item.children || !item.children.length" class="ctx-empty">{{ $root.t('editor.submenu_empty') }}</div>
+        <template v-for="(ch, i) in item.children" :key="ch.id || i">
+          <div v-if="ch.separator" class="ctx-classic-sep"></div>
+          <ctx-flyout-node v-else :item="ch" />
+        </template>
+      </div>
+    </div>
+  `,
+});
+
+app.mount('#app');
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# 构建产物（仅根目录，勿用 [Bb]uild/ 以免吞掉 third_party/webview2/build/ 里的 SDK 头）
+# Build output — root only; a bare build/ glob would swallow the vendored WebView2 SDK headers.
+/build/
+/out/
+
+# CMake 中间文件 / CMake intermediates
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.cmake.state
+
+# Visual Studio / VS Code 本地配置 / Editor & IDE local files
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# 系统垃圾 / OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
