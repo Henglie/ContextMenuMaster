@@ -1,7 +1,7 @@
 # PROGRESS · 鼠标右键主理人 ContextMenuMaster
 
 > 项目进度与 AI 接管文档。**人看的介绍在 [README.md](./README.md)，本文件只给接手的 AI / 开发者。**
-> 中文名「鼠标右键主理人」，英文名 Context Menu Master。最后更新：2026-06-26。
+> 中文名「鼠标右键主理人」，英文名 Context Menu Master。最后更新：2026-06-29。
 
 ---
 
@@ -122,6 +122,8 @@ ContextMenuMaster/
 - [x] 真实图标接入（`extract_icon` data URI，失败回落 ■/▸ 几何字符，绝不 emoji）。
 - [x] 主题预览三态（跟随系统/浅色/深色，只作用于预览菜单，存 localStorage）。
 - [x] CRUD 接线 + 系统项二次确认弹窗 + 写操作「已自动备份」toast。
+- [x] 可视化视图右键编辑：经典菜单行右键弹 FairyGlass 操作菜单（改名/换图标/启停），复用列表视图同套方法（系统项二次确认、自动备份 toast 全继承），与列表视图功能对齐。现代菜单仍只读不挂右键。
+- [x] 关于页「作者与版本」卡片：作者 / 版本 / 协议 / 项目主页（三语），主页链接走后端 `open_url` bind（`ShellExecuteW` 开默认浏览器，仅放行 https 防注入）；页脚版本号读 `appVersion` 与 CMake 工程版本统一。
 - [x] Win11 专区：经典/新版菜单状态 + 一键互换。
 - [x] Windows 内建项三语友好名兜底 `BUILTIN_NAMES`（verb 按 id、handler 按清洗后 label，含夸克AI）。
 - [x] 列表操作按钮统一 FairyGlass 玻璃风（玻璃填充+描边+圆角+图标，hover 提蓝边、active 微缩）。
@@ -134,8 +136,8 @@ ContextMenuMaster/
 - [ ] **verb 级联子菜单真机验证**：本机无 WinRAR 压缩组/TortoiseGit 这类样本，静态展开逻辑就位但没出过真实实例，装一个验证飞出渲染。
 - [ ] **列表视图折叠父项**：暂未对折叠/COM 父项做子项展开或标注（待定要不要加）。
 - [ ] Win11 IExplorerCommand 稀疏包(MSIX)扫描 + 写入（README 已声明开发中）。这是独立大功能：要 `IExplorerCommand` COM 组件 + 稀疏包打包注册，不是改注册表能成，与权限无关。
-- [ ] 编译 x64/x86 Release + 0 警告 + 打包。
-- [ ] git 初始化（Henglie 身份，零 AI 痕迹）。
+- [x] 编译 x64 Release + 打包发行（v0.1.0，随 GitHub Release 附 zip）。x86 Release 待出（需 vcvars32 环境）。
+- [x] git 初始化（Henglie 身份，零 AI 痕迹）+ 推送 GitHub（main 分支，ssh）。
 
 ---
 

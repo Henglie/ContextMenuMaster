@@ -24,8 +24,8 @@
 ## 核心功能
 
 - **双视图实时同步**
-  - **可视化视图（WYSIWYG）**：1:1 模拟 Windows 真实右键菜单，点名称改名、点图标换图标，所见即所得。
-  - **列表视图（List View）**：传统表格，复选框批量勾选，适合一次管理一批菜单项。
+  - **可视化视图（WYSIWYG）**：1:1 模拟 Windows 真实右键菜单，点名称改名、点图标换图标，**右键单击菜单项弹出操作菜单（改名 / 换图标 / 启用停用）**，所见即所得。
+  - **列表视图（List View）**：传统表格，复选框批量勾选，启停开关、改名换图标按钮一应俱全，适合一次管理一批菜单项。
 - **批量魔法**：勾选若干菜单项，一键给它们全部追加同一个后缀（如「 喵~」「 ★」），也可自定义。
 - **Windows 11 专区**
   - **经典菜单一键互换**：在 HKCU 写入空 `InprocServer32` 让新版菜单扩展失效，资源管理器回落到 Win10 经典菜单；并优雅重启 `explorer.exe`，菜单瞬间生效，无需注销重登。再点一下即可恢复。
@@ -111,7 +111,16 @@ ContextMenuMaster/
 
 ---
 
+## 下载
+
+- 预编译版（x64）见 [Releases](https://github.com/Henglie/ContextMenuMaster/releases)：下载 zip 解压，双击 `ContextMenuMaster.exe` 即用，无需安装。
+- 需 WebView2 运行时（Windows 10/11 自带）。
+
+---
+
 ## 许可与作者
 
 - **作者**：恒烈 (EternalBlaze / Henglie)
+- **版本**：v0.1.0
+- **项目主页**：<https://github.com/Henglie/ContextMenuMaster>
 - **协议**：MIT

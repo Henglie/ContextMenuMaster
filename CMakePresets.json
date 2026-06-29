@@ -34,11 +34,23 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "windows-release-arm64",
+      "displayName": "Windows Release ARM64 (MSVC arm64)",
+      "description": "ARM64 发布版（需在 vcvarsamd64_arm64 交叉工具链环境下配置）",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release-arm64",
+      "architecture": { "value": "arm64", "strategy": "external" },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
     { "name": "debug", "configurePreset": "windows-debug" },
     { "name": "release", "configurePreset": "windows-release" },
-    { "name": "release-x86", "configurePreset": "windows-release-x86" }
+    { "name": "release-x86", "configurePreset": "windows-release-x86" },
+    { "name": "release-arm64", "configurePreset": "windows-release-arm64" }
   ]
 }

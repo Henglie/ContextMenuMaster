@@ -3,6 +3,9 @@
 /build/
 /out/
 
+# 发行打包产物（随 GitHub Release 分发，不进仓库）/ Release zips — shipped via GitHub Releases, not tracked.
+/dist/
+
 # CMake 中间文件 / CMake intermediates
 CMakeCache.txt
 CMakeFiles/
