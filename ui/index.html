@@ -107,7 +107,11 @@
 
   /* ---- 主区 / Main ---- */
   .main{ flex:1; display:flex; flex-direction:column; overflow:hidden; gap:14px; min-width:0; }
-  .header{ display:flex; align-items:center; gap:12px; padding:14px 18px; flex-shrink:0; }
+  /* position:relative + z-index 让整个 header 子树（含主题/语言弹层）稳压在 content
+     之上。content 里的 .glass 卡片各自 backdrop-filter 建栈、DOM 靠后，不提层就会
+     盖住 header 的下拉弹层（「深浅/语言菜单被下方按钮覆盖」的根因）。 */
+  .header{ display:flex; align-items:center; gap:12px; padding:14px 18px; flex-shrink:0;
+    position:relative; z-index:40; }
   .header .title{ font-size:17px; font-weight:650; }
   .header .spacer{ flex:1; }
 
@@ -161,6 +165,110 @@
     color:var(--fg); box-shadow:0 0 0 1px rgba(var(--glow-a),.35) inset; }
   .scene-tab .count{ font-size:10.5px; color:var(--fg-dim); font-family:var(--font-mono); }
   .scene-tab.on .count{ color:var(--accent-bright); }
+
+  /* 场景左侧竖直导航 / Scene left vertical nav.
+     editor 页拆左右两栏：左=竖直场景导航（玻璃基座），右=原 slogan+工具条+视图。
+     复用 .scene-tab.on 的微蓝渐变选中语言，只是纵向排列。 */
+  .editor-split{ display:flex; gap:14px; align-items:flex-start; }
+  .scene-side{ flex-shrink:0; width:158px; display:flex; flex-direction:column; gap:4px;
+    padding:8px; border-radius:var(--radius-sm);
+    background:var(--glass-fill); border:1px solid var(--glass-stroke); }
+  .scene-main{ flex:1; min-width:0; }
+  .scene-vtab{ display:flex; align-items:center; gap:9px; padding:9px 12px;
+    border-radius:var(--radius-sm); cursor:pointer; font-size:12.5px; color:var(--fg-muted);
+    border:1px solid transparent; white-space:nowrap;
+    transition:background var(--dur-quick), color var(--dur-quick); }
+  .scene-vtab:hover{ color:var(--fg); background:var(--glass-fill-strong); }
+  .scene-vtab.on{ background:linear-gradient(120deg,rgba(var(--glow-a),.28),var(--accent-soft));
+    color:var(--fg); box-shadow:0 0 0 1px rgba(var(--glow-a),.35) inset; }
+  .scene-vtab .ic{ width:15px; text-align:center; font-size:12px; opacity:.85; }
+  .scene-vtab .label{ flex:1; }
+  .scene-vtab .count{ font-size:10.5px; color:var(--fg-dim); font-family:var(--font-mono); }
+  .scene-vtab.on .count{ color:var(--accent-bright); }
+  .scene-vsep{ height:1px; margin:6px 4px;
+    background:linear-gradient(90deg,var(--glass-stroke),transparent); }
+
+  /* Win+X 场景占位（数据接线归 T10）/ Win+X placeholder, data wired in T10 */
+  .winx-placeholder{ padding:40px 24px; text-align:center; color:var(--fg-muted);
+    font-size:13px; line-height:1.8; }
+  .winx-placeholder .big-glyph{ font-size:34px; color:var(--fg-dim); margin-bottom:12px; }
+
+  /* Win+X 场景视图（分组卡 + 项行 + 启停/删除）/ Win+X scene view */
+  .winx-group{ margin-bottom:16px; }
+  .winx-group-head{ display:flex; align-items:center; gap:8px; margin-bottom:8px;
+    padding:0 2px; }
+  .winx-group-head .wg-name{ font-size:13px; font-weight:600; color:var(--fg); letter-spacing:.3px; }
+  .winx-group-head .wg-count{ font-size:11px; color:var(--fg-muted); min-width:18px; height:18px;
+    padding:0 6px; display:inline-flex; align-items:center; justify-content:center;
+    border-radius:9px; background:var(--glass-fill); border:1px solid var(--glass-stroke); }
+  .winx-items{ display:flex; flex-direction:column; gap:6px; }
+  .winx-item-empty{ font-size:12px; color:var(--fg-muted); padding:8px 12px; }
+  .winx-item{ display:flex; align-items:center; gap:12px; padding:10px 14px;
+    border-radius:var(--radius-sm); background:var(--glass-fill);
+    border:1px solid var(--glass-stroke); transition:border-color var(--dur-quick); }
+  .winx-item:hover{ border-color:rgba(var(--glow-a),.5); }
+  .winx-item.disabled{ opacity:.55; }
+  .winx-item .wi-glyph{ width:22px; height:22px; flex-shrink:0; display:inline-flex;
+    align-items:center; justify-content:center; color:var(--fg-dim); font-size:14px; }
+  .winx-item .wi-glyph .glyph-img{ width:20px; height:20px; object-fit:contain; }
+  .winx-item .wi-meta{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .winx-item .wi-name{ font-size:13px; color:var(--fg); font-weight:500;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .winx-item .wi-target{ font-size:11px; color:var(--fg-muted);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .winx-item .wi-switch{ flex-shrink:0; }
+  .winx-item .wi-del{ flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;
+    width:30px; height:30px; padding:0; border-radius:var(--radius-sm);
+    background:var(--glass-fill); border:1px solid var(--glass-stroke); color:var(--fg-muted);
+    cursor:pointer; font-family:inherit;
+    transition:transform var(--dur-fast) var(--spring), border-color var(--dur-quick), color var(--dur-quick); }
+  .winx-item .wi-del:hover{ border-color:var(--warn); color:var(--warn); }
+  .winx-item .wi-del:active{ transform:scale(.94); }
+  .winx-item .wi-del:disabled{ opacity:.4; cursor:not-allowed; }
+
+  /* Win+X 新增项弹层字段 / Win+X add-item modal fields */
+  .winx-add-modal{ min-width:380px; }
+  .winx-add-body{ display:flex; flex-direction:column; gap:12px; margin:6px 0 4px; }
+  .wa-field{ display:flex; flex-direction:column; gap:5px; }
+  .wa-field .wa-label{ font-size:12px; color:var(--fg-muted); }
+  .wa-input, .wa-select{ padding:8px 11px; border-radius:var(--radius-sm);
+    background:var(--glass-fill); border:1px solid var(--glass-stroke); color:var(--fg);
+    font-size:13px; font-family:inherit; outline:none;
+    transition:border-color var(--dur-quick); }
+  .wa-input:focus, .wa-select:focus{ border-color:rgba(var(--glow-a),.6); }
+
+  /* 特殊菜单场景（发送到/拖放/新建/打开方式）—— 扁平列表，复用 winx-item 视觉 */
+  /* Special-menu scenes: flat list, reuse winx-item look. */
+  .sp-list{ display:flex; flex-direction:column; gap:6px; }
+  .sp-group-head{ font-size:12px; font-weight:600; color:var(--fg-dim); letter-spacing:.3px;
+    margin:12px 2px 4px; }
+  .sp-group-head:first-child{ margin-top:0; }
+  .sp-item{ display:flex; align-items:center; gap:12px; padding:10px 14px;
+    border-radius:var(--radius-sm); background:var(--glass-fill);
+    border:1px solid var(--glass-stroke); transition:border-color var(--dur-quick); }
+  .sp-item:hover{ border-color:rgba(var(--glow-a),.5); }
+  .sp-item.disabled{ opacity:.55; }
+  .sp-item .wi-glyph{ width:22px; height:22px; flex-shrink:0; display:inline-flex;
+    align-items:center; justify-content:center; color:var(--fg-dim); font-size:14px; }
+  .sp-item .wi-glyph .glyph-img{ width:20px; height:20px; object-fit:contain; }
+  .sp-item .wi-meta{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .sp-item .wi-name{ font-size:13px; color:var(--fg); font-weight:500;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sp-item .wi-target{ font-size:11px; color:var(--fg-muted);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sp-item .wi-switch{ flex-shrink:0; }
+  .sp-item .wi-del{ flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;
+    width:30px; height:30px; padding:0; border-radius:var(--radius-sm);
+    background:var(--glass-fill); border:1px solid var(--glass-stroke); color:var(--fg-muted);
+    cursor:pointer; font-family:inherit;
+    transition:transform var(--dur-fast) var(--spring), border-color var(--dur-quick), color var(--dur-quick); }
+  .sp-item .wi-del:hover{ border-color:var(--warn); color:var(--warn); }
+  .sp-item .wi-del:active{ transform:scale(.94); }
+  .sp-item .wi-del:disabled{ opacity:.4; cursor:not-allowed; }
+  .sp-sys{ margin-left:7px; font-size:10px; color:var(--fg-muted); padding:1px 6px;
+    border-radius:8px; background:var(--glass-fill); border:1px solid var(--glass-stroke); }
+  .sp-readonly{ flex-shrink:0; font-size:11px; color:var(--fg-muted); padding:2px 8px;
+    border-radius:8px; background:var(--glass-fill); border:1px solid var(--glass-stroke); }
 
   .slogan{ font-size:12.5px; color:var(--fg-muted); margin-bottom:14px; line-height:1.7; }
 
@@ -551,7 +659,27 @@
   <aside class="side glass">
     <div class="brand">{{ t('brand.zh') }}<span class="en">{{ t('brand.en') }}</span></div>
     <nav class="nav">
-      <div v-for="it in navItems" :key="it.key" class="nav-item" :class="{on: tab===it.key}" @click="tab=it.key">
+      <!-- 场景（右键菜单各来源）直接平铺到顶层，与 Win11/关于 平级 -->
+      <!-- Scenes flattened to top level, peer to Win11 zone / About -->
+      <div v-for="sc in scenes" :key="sc.id" class="nav-item"
+           :class="{on: tab==='editor' && scene===sc.id}" @click="selectScene(sc.id)">
+        <span class="ic">{{ sc.glyph }}</span>{{ t('scene.'+sc.id) }}
+        <span class="nav-count" v-if="sceneCounts[sc.id] != null">{{ sceneCounts[sc.id] }}</span>
+      </div>
+      <div class="nav-item" :class="{on: tab==='editor' && scene==='winx'}" @click="selectScene('winx')">
+        <span class="ic">⊞</span>{{ t('scene.winx') }}
+      </div>
+      <div class="nav-sep"></div>
+      <!-- 特殊菜单场景（发送到/新建/拖放/打开方式）—— 各自独立数据源 -->
+      <!-- Special-menu scenes (SendTo / New / DragDrop / OpenWith) -->
+      <div v-for="sc in specialScenes" :key="sc.id" class="nav-item"
+           :class="{on: tab==='editor' && scene===sc.id}" @click="selectScene(sc.id)">
+        <span class="ic">{{ sc.glyph }}</span>{{ t('scene.'+sc.id) }}
+        <span class="nav-count" v-if="sceneCounts[sc.id] != null">{{ sceneCounts[sc.id] }}</span>
+      </div>
+      <div class="nav-sep"></div>
+      <!-- 页面项（Win11 专区 / 关于）/ Page items -->
+      <div v-for="it in pageItems" :key="it.key" class="nav-item" :class="{on: tab===it.key}" @click="tab=it.key">
         <span class="ic">{{ it.ic }}</span>{{ t('nav.'+it.key) }}
       </div>
     </nav>
@@ -563,7 +691,7 @@
   <!-- 主区 / Main -->
   <main class="main">
     <header class="header glass">
-      <div class="title">{{ t('nav.'+tab) }}</div>
+      <div class="title">{{ headerTitle }}</div>
       <div class="spacer"></div>
 
       <!-- 主题切换：跟随系统/浅色/深色 -->
@@ -597,15 +725,109 @@
       <!-- ============ 菜单编辑（场景选择 + 双视图） ============ -->
       <!-- ============ Menu Editor (scene tabs + dual view) ============ -->
       <div v-show="tab==='editor'" class="lg-enter">
-        <!-- 场景选择条 / Scene tab strip -->
-        <div class="scene-bar">
-          <div v-for="sc in scenes" :key="sc.id" class="scene-tab" :class="{on: scene===sc.id}"
-               @click="setScene(sc.id)">
-            <span>{{ t('scene.'+sc.id) }}</span>
-            <span class="count" v-if="sceneCounts[sc.id] != null">{{ sceneCounts[sc.id] }}</span>
+        <!-- 场景导航已平铺到顶层侧栏；此处只渲染当前场景内容 -->
+        <!-- Scene nav lives in the top-level sidebar now; render current scene only -->
+        <div class="scene-main">
+        <!-- Win+X 场景视图：按 Group 分组渲染 lnk 项，启停/新增/删除 / Win+X scene view -->
+        <div v-if="scene==='winx'" class="winx-view">
+          <div class="slogan">{{ t('winx.slogan') }}</div>
+
+          <div class="toolbar">
+            <div class="spacer"></div>
+            <button class="btn sm" @click="loadWinx" :disabled="busy">
+              <span class="ic">↻</span>{{ t('winx.refresh') }}
+            </button>
+            <button class="btn sm primary" @click="winxAddOpen" :disabled="busy">
+              <span class="ic">＋</span>{{ t('winx.add') }}
+            </button>
           </div>
+
+          <!-- 加载中 / Loading -->
+          <div v-if="winxLoading" class="loading"><span class="spinner"></span>{{ t('winx.loading') }}</div>
+
+          <!-- 空（无 WinX 根 / 无项）/ Empty -->
+          <div v-else-if="!winxGroups.length" class="empty">{{ t('winx.empty') }}</div>
+
+          <!-- 分组列表（组倒序由后端保证，Group3 在顶）/ groups (already reversed by backend) -->
+          <template v-else>
+            <div v-for="grp in winxGroups" :key="grp.id" class="winx-group">
+              <div class="winx-group-head">
+                <span class="wg-name">{{ grp.id }}</span>
+                <span class="wg-count">{{ grp.items.length }}</span>
+              </div>
+              <div class="winx-items">
+                <div v-if="!grp.items.length" class="winx-item-empty">{{ t('winx.group_empty') }}</div>
+                <div v-for="it in grp.items" :key="it.id" class="winx-item" :class="{disabled: !it.enabled}">
+                  <span class="wi-glyph">
+                    <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
+                    <span v-else>▸</span>
+                  </span>
+                  <span class="wi-meta">
+                    <span class="wi-name">{{ it.label }}</span>
+                    <span class="wi-target" :title="it.target">{{ it.target }}</span>
+                  </span>
+                  <span class="wi-switch">
+                    <span class="switch" :class="{on: it.enabled}"
+                          @click="winxToggle(it)"><span class="knob"></span></span>
+                  </span>
+                  <button class="wi-del" @click="winxDel(it)" :disabled="busy" :title="t('winx.del')">
+                    <span class="ic">⌫</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
 
+        <!-- 特殊菜单场景（发送到 / 拖放 / 新建 / 打开方式）—— 统一扁平列表视图。
+             sendto 支持新增；openwith 只读（canToggle=false）。/ Special-menu scenes. -->
+        <div v-else-if="isSpecialScene" class="sp-view">
+          <div class="slogan">{{ t('sp.'+scene+'_slogan') }}</div>
+
+          <div class="toolbar">
+            <div class="spacer"></div>
+            <button class="btn sm" @click="loadSpecial(scene, true)" :disabled="busy">
+              <span class="ic">↻</span>{{ t('winx.refresh') }}
+            </button>
+            <button v-if="scene==='sendto'" class="btn sm primary" @click="sendtoAddOpen" :disabled="busy">
+              <span class="ic">＋</span>{{ t('sp.add') }}
+            </button>
+          </div>
+
+          <div v-if="spLoading" class="loading"><span class="spinner"></span>{{ t('winx.loading') }}</div>
+          <div v-else-if="!spItems.length" class="empty">{{ t('sp.'+scene+'_empty') }}</div>
+
+          <template v-else>
+            <!-- dragdrop 按对象类分组显示小标题；其余场景直接平铺 -->
+            <div class="sp-list">
+              <template v-for="(it, idx) in spItems" :key="it.id">
+                <div v-if="scene==='dragdrop' && (idx===0 || spItems[idx-1].objectClass !== it.objectClass)"
+                     class="sp-group-head">{{ it.objectClass }}</div>
+                <div class="sp-item" :class="{disabled: !it.enabled}">
+                  <span class="wi-glyph">
+                    <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
+                    <span v-else>▸</span>
+                  </span>
+                  <span class="wi-meta">
+                    <span class="wi-name">{{ it.label }}<span v-if="it.system" class="sp-sys">{{ t('sp.sys') }}</span></span>
+                    <span class="wi-target" :title="it.target || it.command || it.ext">{{ it.target || it.command || it.ext }}</span>
+                  </span>
+                  <!-- openwith 只读：不渲染开关，标注只读 -->
+                  <span v-if="it.canToggle === false" class="sp-readonly">{{ t('sp.readonly') }}</span>
+                  <span v-else class="wi-switch">
+                    <span class="switch" :class="{on: it.enabled}"
+                          @click="spToggle(it)"><span class="knob"></span></span>
+                  </span>
+                  <button v-if="scene==='sendto'" class="wi-del" @click="sendtoDel(it)" :disabled="busy" :title="t('winx.del')">
+                    <span class="ic">⌫</span>
+                  </button>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <template v-else>
         <div class="slogan">{{ t('editor.slogan') }}</div>
 
         <div class="toolbar">
@@ -845,6 +1067,8 @@
             </div>
           </div>
         </div>
+        </template>
+        </div><!-- /.scene-main -->
       </div>
 
       <!-- ============ Win11 专区 ============ -->
@@ -945,6 +1169,58 @@
     </div>
   </div>
 
+  <!-- Win+X 新增项弹层 / Win+X add-item modal -->
+  <div v-if="winxAdd.show" class="modal-mask" @click.self="winxAdd.show=false">
+    <div class="modal winx-add-modal">
+      <div class="title">{{ t('winx.add_title') }}</div>
+      <div class="winx-add-body">
+        <label class="wa-field">
+          <span class="wa-label">{{ t('winx.add_group') }}</span>
+          <select v-model="winxAdd.group" class="wa-select">
+            <option v-for="g in winxAddGroups" :key="g" :value="g">{{ g }}</option>
+          </select>
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('winx.add_target') }}</span>
+          <input class="wa-input" type="text" v-model="winxAdd.target" :placeholder="t('winx.add_target_ph')" />
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('winx.add_args') }}</span>
+          <input class="wa-input" type="text" v-model="winxAdd.args" :placeholder="t('winx.add_args_ph')" />
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('winx.add_name') }}</span>
+          <input class="wa-input" type="text" v-model="winxAdd.name" :placeholder="t('winx.add_name_ph')" />
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn" @click="winxAdd.show=false">{{ t('common.cancel') }}</button>
+        <button class="btn primary" :disabled="busy" @click="winxAddCommit">{{ t('common.confirm') }}</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 发送到 新增项弹层 / SendTo add-item modal -->
+  <div v-if="sendtoAdd.show" class="modal-mask" @click.self="sendtoAdd.show=false">
+    <div class="modal winx-add-modal">
+      <div class="title">{{ t('sp.sendto_add_title') }}</div>
+      <div class="winx-add-body">
+        <label class="wa-field">
+          <span class="wa-label">{{ t('sp.add_target') }}</span>
+          <input class="wa-input" type="text" v-model="sendtoAdd.target" :placeholder="t('sp.add_target_ph')" />
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('sp.add_name') }}</span>
+          <input class="wa-input" type="text" v-model="sendtoAdd.name" :placeholder="t('sp.add_name_ph')" />
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn" @click="sendtoAdd.show=false">{{ t('common.cancel') }}</button>
+        <button class="btn primary" :disabled="busy" @click="sendtoAddCommit">{{ t('common.confirm') }}</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 系统项二次确认 / Confirm modal for system items -->
   <div v-if="confirm.show" class="modal-mask" @click.self="confirm.show=false">
     <div class="modal">
@@ -976,6 +1252,39 @@ const i18n = {
     scene:{
       desktop:'桌面空白', file:'文件', folder:'文件夹',
       folder_bg:'文件夹空白', drive:'驱动器', recycle:'回收站',
+      allfsobjects:'所有文件对象', computer:'此电脑', library:'库',
+      winx:'Win+X 菜单', winx_todo:'Win+X 菜单管理开发中',
+    },
+    winx:{
+      slogan:'Win+X 菜单（按 Win+X 或右键开始按钮弹出）。项按分组排列，Group3 在最上。启停 = 改快捷方式扩展名，随时可逆；新增项会自动写入 explorer 认可的 hash 后显示。',
+      refresh:'重新扫描', add:'新增项',
+      loading:'正在枚举 Win+X 快捷方式…',
+      empty:'未找到 Win+X 项（可能系统无此目录）。',
+      group_empty:'（此组下无项）',
+      del:'删除此项', del_title:'删除 Win+X 项', del_desc:'确定删除「{name}」？文件将送入回收站，可从回收站还原。',
+      del_ok:'已删除（已送回收站）', add_ok:'已新增（重扫 Win+X 生效）',
+      add_title:'新增 Win+X 项',
+      add_group:'所属分组', add_target:'目标路径', add_target_ph:'如 C:\\\\Windows\\\\System32\\\\cmd.exe',
+      add_args:'启动参数（可选）', add_args_ph:'如 /k dir',
+      add_name:'显示名称', add_name_ph:'菜单里显示的名字',
+      need_target:'请填写目标路径', need_name:'请填写显示名称',
+    },
+    sp:{
+      sendto_slogan:'右键「发送到」子菜单的项（存于 %APPDATA%\\Microsoft\\Windows\\SendTo）。停用＝加 .disabled 后缀，可逆；可新增指向任意程序/文件夹的项。',
+      dragdrop_slogan:'拖放处理程序：右键拖拽文件到文件夹/驱动器松开时弹出的菜单由它们决定。停用＝子键搬到 -DragDropHandlers，可逆。按对象类分组。',
+      shellnew_slogan:'右键「新建」子菜单的项（带 ShellNew 的扩展名）。停用＝ ShellNew 子键改名为 -ShellNew，可逆。写前自动备份注册表。',
+      openwith_slogan:'右键「打开方式」候选应用（注册在 Applications 下的程序）。仅只读枚举——启停涉及系统文件关联，风险较高，暂不提供。',
+      sendto_empty:'未发现「发送到」项（或找不到 SendTo 目录）。',
+      dragdrop_empty:'未发现拖放处理程序。',
+      shellnew_empty:'未发现带 ShellNew 的扩展名。',
+      openwith_empty:'未发现注册在 Applications 下的应用。',
+      add:'新增项', readonly:'只读', sys:'系统',
+      add_title:'新增「发送到」项', add_target:'目标路径', add_name:'显示名称',
+      add_target_ph:'程序/文件夹/文档的完整路径', add_name_ph:'菜单里显示的名字',
+      need_target:'请填写目标路径', need_name:'请填写显示名称',
+      add_ok:'新增成功',
+      del_title:'删除「发送到」项', del_desc:'确定删除「{name}」？文件将送到回收站，可还原。',
+      del_ok:'已删除（送回收站）',
     },
     editor:{
       slogan:'可视化与列表双视图实时同步。点名称改名、点图标换图标，列表里批量勾选管理。所有改动只写当前用户注册表（HKCU），随时可逆。',
@@ -1050,6 +1359,14 @@ const i18n = {
       bad_scene:'场景无效', empty_label:'名字不能为空',
       auto_backed_up:'已自动备份原始注册表',
       load_failed:'读取注册表失败',
+      winx_failed:'操作失败', winx_root_missing:'找不到 Win+X 目录',
+      bad_id:'路径非法', not_winx_lnk:'不是有效的 Win+X 快捷方式',
+      not_found:'项目不存在', rename_failed:'启停失败（改扩展名出错）',
+      bad_arg:'参数不完整', bad_group:'分组名非法', bad_name:'名字含非法字符',
+      target_not_found:'目标程序不存在', already_exists:'同名项已存在',
+      create_failed:'创建快捷方式失败', hash_failed:'写入 hash 失败（explorer 可能不显示）',
+      delete_failed:'删除失败',
+      sp_failed:'操作失败', sendto_root_missing:'找不到「发送到」目录',
     },
   },
   'zh-TW': {
@@ -1060,6 +1377,41 @@ const i18n = {
     scene:{
       desktop:'桌面空白', file:'檔案', folder:'資料夾',
       folder_bg:'資料夾空白', drive:'磁碟機', recycle:'資源回收筒',
+      allfsobjects:'所有檔案物件', computer:'本機', library:'媒體櫃',
+      winx:'Win+X 選單', winx_todo:'Win+X 選單管理開發中',
+    },
+    winx:{
+      slogan:'Win+X 選單（按 Win+X 或右鍵開始鈕彈出）。項目存於檔案系統（%LOCALAPPDATA%\\...\\WinX），非登錄檔；停用＝改副檔名為 .lnk.disabled，可逆。分組由下而上排（Group3 在選單最上）。',
+      refresh:'重新掃描', add:'新增項目',
+      loading:'正在讀取 Win+X 選單項…',
+      empty:'未發現 Win+X 選單項（或找不到 WinX 資料夾）。',
+      group_empty:'此分組下無項目',
+      del:'刪除此項',
+      del_title:'刪除 Win+X 項目', del_desc:'確定刪除「{name}」？檔案將送到資源回收筒，可還原。',
+      del_ok:'已刪除（送資源回收筒）', add_ok:'新增成功',
+      add_title:'新增 Win+X 項目',
+      add_group:'所屬分組', add_target:'目標路徑', add_target_ph:'如 C:\\\\Windows\\\\System32\\\\cmd.exe',
+      add_args:'啟動參數（可留空）', add_args_ph:'如 /k echo hi',
+      add_name:'顯示名稱', add_name_ph:'如 命令提示字元',
+      need_target:'目標路徑不能為空', need_name:'顯示名稱不能為空',
+    },
+    sp:{
+      sendto_slogan:'右鍵「傳送到」子選單。項目存於 %APPDATA%\\Microsoft\\Windows\\SendTo，停用＝加 .disabled 副檔名，可逆。可新增指向任意程式/資料夾的項目。',
+      dragdrop_slogan:'用滑鼠右鍵拖曳檔案放開時彈出的選單（複製到此處/移動到此處…）由這些拖放處理程式決定，分佈於資料夾/磁碟機等物件類。停用＝子鍵搬到 -DragDropHandlers，可逆。',
+      shellnew_slogan:'右鍵「新增」子選單的項目。某副檔名下有 ShellNew 鍵，「新增」裡就出現該類型。停用＝ShellNew 鍵搬到 -ShellNew，寫入前自動備份，可逆。',
+      openwith_slogan:'右鍵「開啟方式」候選程式（登錄於 Applications）。此處僅唯讀列出，啟停牽涉系統檔案關聯、風險較高，暫不提供。',
+      sendto_empty:'未發現「傳送到」項目。',
+      dragdrop_empty:'未發現拖放處理程式。',
+      shellnew_empty:'未發現帶 ShellNew 的副檔名。',
+      openwith_empty:'未發現 Applications 下註冊的程式。',
+      add:'新增項目', readonly:'唯讀', sys:'系統',
+      need_target:'目標路徑不能為空', need_name:'顯示名稱不能為空',
+      add_title:'新增「傳送到」項目',
+      add_target:'目標路徑', add_target_ph:'如 D:\\工具\\xxx.exe',
+      add_name:'顯示名稱', add_name_ph:'選單裡顯示的名字',
+      add_ok:'新增成功',
+      del_title:'刪除此項目', del_desc:'確定刪除「{name}」？檔案將送到資源回收筒，可還原。',
+      del_ok:'已刪除（送資源回收筒）',
     },
     editor:{
       slogan:'視覺化與清單雙檢視即時同步。點名稱改名、點圖示換圖示，清單裡批次勾選管理。所有變更只寫目前使用者登錄檔（HKCU），隨時可逆。',
@@ -1134,6 +1486,15 @@ const i18n = {
       bad_scene:'場景無效', empty_label:'名字不能為空',
       auto_backed_up:'已自動備份原始登錄檔',
       load_failed:'讀取登錄檔失敗',
+      winx_failed:'操作失敗', winx_root_missing:'找不到 Win+X 目錄',
+      bad_id:'路徑非法', not_winx_lnk:'不是有效的 Win+X 捷徑',
+      not_found:'項目不存在', rename_failed:'啟停失敗（改副檔名出錯）',
+      bad_arg:'參數不完整', bad_group:'分組名非法', bad_name:'名字含非法字元',
+      target_not_found:'目標程式不存在', already_exists:'同名項已存在',
+      create_failed:'建立捷徑失敗', hash_failed:'寫入 hash 失敗（explorer 可能不顯示）',
+      delete_failed:'刪除失敗',
+      sp_failed:'操作失敗', sendto_root_missing:'找不到「傳送到」資料夾', sendto_failed:'操作失敗',
+      dragdrop_root_missing:'找不到拖放處理程式', shellnew_root_missing:'找不到新增選單項',
     },
   },
   'en': {
@@ -1144,6 +1505,43 @@ const i18n = {
     scene:{
       desktop:'Desktop', file:'File', folder:'Folder',
       folder_bg:'Folder bg', drive:'Drive', recycle:'Recycle Bin',
+      allfsobjects:'All file objects', computer:'This PC', library:'Library',
+      winx:'Win+X Menu', winx_todo:'Win+X menu management coming soon',
+    },
+    winx:{
+      slogan:'Win+X menu (the power-user menu on right-click Start / Win+X). Items live in the file system, not the registry: toggling renames .lnk / .lnk.disabled, fully reversible. Groups are shown top-down (Group3 first).',
+      refresh:'Rescan', add:'Add item',
+      loading:'Enumerating Win+X items…',
+      empty:'No Win+X items found (or the WinX folder is missing).',
+      group_empty:'(No items in this group)',
+      del:'Delete item',
+      del_title:'Delete this Win+X item?',
+      del_desc:'Deleting <b>{name}</b> sends its shortcut to the Recycle Bin — recoverable. Continue?',
+      del_ok:'Deleted (sent to Recycle Bin)',
+      add_title:'Add Win+X item',
+      add_group:'Group', add_target:'Target path', add_target_ph:'e.g. C:\\\\Windows\\\\System32\\\\cmd.exe',
+      add_args:'Arguments (optional)', add_args_ph:'e.g. /k cd C:\\\\',
+      add_name:'Display name', add_name_ph:'Name shown in the menu',
+      add_ok:'Added. Restart Explorer or re-open Win+X to see it.',
+      need_target:'Target path is required', need_name:'Display name is required',
+    },
+    sp:{
+      sendto_slogan:'The right-click "Send to" submenu. Items are files under %APPDATA%\\\\Microsoft\\\\Windows\\\\SendTo — not the registry. Toggling appends/removes a ".disabled" suffix, fully reversible. You can add a target as a new shortcut.',
+      dragdrop_slogan:'Drag-drop handlers: the menu (Copy here / Move here / Create shortcut…) shown when you right-drag a file onto a folder or drive. They are COM extensions grouped by object class; toggling moves the key to "-DragDropHandlers", reversible.',
+      shellnew_slogan:'The "New" submenu. An extension with a ShellNew key shows up as "New <type>". Toggling moves the ShellNew key to "-ShellNew" (backed up first), reversible. Adding a new file type is not supported here.',
+      openwith_slogan:'Apps registered under Applications, candidates for "Open with". Read-only: "Open with" is a dynamic file association and toggling it risks breaking system associations, so no on/off here.',
+      sendto_empty:'No Send-to items found.',
+      dragdrop_empty:'No drag-drop handlers found.',
+      shellnew_empty:'No New-menu items found.',
+      openwith_empty:'No registered apps found.',
+      add:'Add item', readonly:'Read-only', sys:'System',
+      add_title:'Add a Send-to item',
+      add_target:'Target', add_target_ph:'Full path to an app / folder / file',
+      add_name:'Display name', add_name_ph:'Name shown in the menu',
+      need_target:'Target path is required', need_name:'Display name is required',
+      add_ok:'Added', del_ok:'Deleted (sent to Recycle Bin)',
+      del_title:'Delete this Send-to item?',
+      del_desc:'Deleting <b>{name}</b> sends its file to the Recycle Bin — recoverable. Continue?',
     },
     editor:{
       slogan:'Visual and list views stay in sync. Click a name to rename, click an icon to change it; batch-manage in the list. All changes go to the current-user registry (HKCU) and are fully reversible.',
@@ -1218,6 +1616,14 @@ const i18n = {
       bad_scene:'Invalid scene', empty_label:'Name cannot be empty',
       auto_backed_up:'Original registry auto-backed up',
       load_failed:'Failed to read registry',
+      winx_failed:'Operation failed', winx_root_missing:'Win+X folder not found',
+      bad_id:'Invalid path', not_winx_lnk:'Not a valid Win+X shortcut',
+      not_found:'Item not found', rename_failed:'Toggle failed (rename error)',
+      bad_arg:'Missing arguments', bad_group:'Invalid group name', bad_name:'Name has invalid characters',
+      target_not_found:'Target program not found', already_exists:'An item with this name exists',
+      create_failed:'Failed to create shortcut', hash_failed:'Failed to write hash (Explorer may hide it)',
+      delete_failed:'Delete failed',
+      sp_failed:'Operation failed', sendto_root_missing:'SendTo folder not found',
     },
   },
 };
@@ -1290,10 +1696,11 @@ const app = createApp({
 
       tab: 'editor',
       // 版本号与 CMake project(VERSION) 保持一致；页脚与关于页共用。
-      appVersion: '0.1.0',
+      appVersion: '0.2beta',
       repoUrl: 'https://github.com/Henglie/ContextMenuMaster',
-      navItems: [
-        { key:'editor', ic:'▤' },
+      // 顶层「页面」项（Win11 专区 / 关于）—— 场景不在此，场景已平铺到顶层单列。
+      // Top-level page items (peer to the flattened scene list above them).
+      pageItems: [
         { key:'win11',  ic:'⊞' },
         { key:'about',  ic:'◔' },
       ],
@@ -1306,9 +1713,36 @@ const app = createApp({
         { id:'folder_bg', glyph:'▢' },
         { id:'drive',     glyph:'◫' },
         { id:'recycle',   glyph:'⌫' },
+        { id:'allfsobjects', glyph:'▨' },
+        { id:'computer',  glyph:'▭' },
+        { id:'library',   glyph:'▥' },
+      ],
+      // 特殊菜单场景：数据源与注册表 scan_scene 不同（各自独立 bind），单列导航。
+      // sendto/openwith 文件系统或注册表列表；dragdrop 拖放 handler；shellnew 新建菜单。
+      // Special-menu scenes with their own binds (not scan_scene). Separate nav group.
+      specialScenes: [
+        { id:'sendto',   glyph:'➤' },
+        { id:'shellnew', glyph:'✚' },
+        { id:'dragdrop', glyph:'⇲' },
+        { id:'openwith', glyph:'◪' },
       ],
       scene: 'desktop',
       sceneCounts: {},        // { sceneId: 项数 } —— tab 角标 / count badge per scene tab
+
+      // Win+X 场景（文件系统机制，非注册表）。分组数据由 scan_winx 拉，组已倒序。
+      // Win+X scene state. Groups come from scan_winx (already reversed).
+      winxGroups: [],
+      winxLoading: false,
+      winxLoaded: false,      // 懒加载标记：首次切到 winx 才拉 / lazy-load once
+      winxAdd: { show:false, group:'Group3', target:'', args:'', name:'' },
+
+      // 特殊菜单场景（sendto/dragdrop/shellnew/openwith）——各自扁平列表数据源。
+      // 统一用 spItems 承载当前特殊场景数据 + spLoading/spLoaded 懒加载标记。
+      // Special-menu scenes share one flat list holder (spItems) with lazy-load flags.
+      spItems: [],
+      spLoading: false,
+      spLoaded: {},            // { sceneId: true } 已加载过的特殊场景
+      sendtoAdd: { show:false, target:'', name:'' },
 
       view: 'visual',          // visual（可视化双菜单并排）/ list（列表）
       items: [],               // 当前场景的菜单项（含 _checked / icon 临时字段）
@@ -1341,6 +1775,12 @@ const app = createApp({
     };
   },
   computed: {
+    // 顶栏标题：场景页（tab===editor）显示当前场景名（含 Win+X），其余页显示页面名。
+    // Header title: scene name on editor tab (incl. Win+X), otherwise page name.
+    headerTitle() {
+      if (this.tab === 'editor') return this.t('scene.' + this.scene);
+      return this.t('nav.' + this.tab);
+    },
     langLabel() { return (this.langs.find(l => l.code===this.lang) || {}).name || 'English'; },
     themeLabel() {
       const m = this.themeModes.find(x => x.code===this.themeMode);
@@ -1354,6 +1794,35 @@ const app = createApp({
     // WYSIWYG 里显示的项：先 verb 再 handler，handler 前自动加分隔线（视觉上靠近真实 Win11）。
     // visibleItems used by WYSIWYG: keep order, separator is implicit in markup.
     visibleItems() { return this.items; },
+
+    // Win+X 新增项可选目标组：现有分组并 Group1~3（去重，Group3 在前与菜单一致）。
+    // Groups available when adding a Win+X item: existing groups ∪ Group1~3.
+    winxAddGroups() {
+      const set = new Set(['Group3','Group2','Group1']);
+      for (const g of this.winxGroups) if (g && g.id) set.add(g.id);
+      return Array.from(set);
+    },
+
+    // 当前场景是否为「特殊菜单」（sendto/dragdrop/shellnew/openwith）——这些走各自
+    // 独立 bind 的扁平列表数据源（spItems），不是 scan_scene，故视图/加载单独路由。
+    // Whether the current scene is a special-menu scene (own bind + flat list).
+    isSpecialScene() {
+      return this.specialScenes.some(s => s.id === this.scene);
+    },
+    // 当前特殊场景的后端 bind 前缀映射（scan_<x> / set_<x>_enabled）。
+    spBind() {
+      const map = {
+        sendto:   { scan:'scan_sendto',   toggle:'set_sendto_enabled' },
+        dragdrop: { scan:'scan_dragdrop', toggle:'set_dragdrop_enabled' },
+        shellnew: { scan:'scan_shellnew', toggle:'set_shellnew_enabled' },
+        openwith: { scan:'scan_openwith', toggle:null },
+      };
+      return map[this.scene] || null;
+    },
+    // 当前特殊场景是否支持新增项（仅 sendto）。
+    spCanAdd() { return this.scene === 'sendto'; },
+    // 当前特殊场景是否支持启停（openwith 只读）。
+    spCanToggle() { return this.scene !== 'openwith'; },
 
     // 现代菜单（Win11 新菜单）只读示意项。**关键事实**：现代菜单只枚举 shell 内建命令
     // + 云提供程序命令 + 满足 IExplorerCommand 且有包标识（稀疏包/MSIX）的扩展；
@@ -1506,14 +1975,216 @@ const app = createApp({
       this.ctxMenu = { for: null };
     },
 
+    // —— 顶层点场景项 —— 场景已平铺到顶层导航（与 Win11/关于 平级）。点击先把
+    //    tab 切回 editor（可能当前在 win11/about 页），再选场景。不能直接调 setScene：
+    //    从别的页点回「当前 scene」时 scene 没变会被 setScene 的同场景短路挡掉，导致
+    //    tab 切不过去。故这里单独处理 tab，再把加载逻辑交给 setScene / 首次拉取。
+    // Scenes are flattened to the top-level nav. Clicking one switches tab back to
+    // editor first, then selects the scene (bypassing setScene's same-scene guard).
+    selectScene(id) {
+      const wasEditor = this.tab === 'editor';
+      this.tab = 'editor';
+      if (wasEditor && this.scene === id) return;  // 已在该场景页，无需重载
+      if (this.scene === id) {
+        // scene 未变但刚从别的页切回：补一次数据加载（列表可能为空/过期）。
+        this.editId = null; this.glyphPickFor = null;
+        if (id === 'winx') { if (!this.winxLoaded) this.loadWinx(); return; }
+        if (this.specialScenes.some(s => s.id === id)) {
+          if (!this.spLoaded[id]) this.loadSpecial(id); return;
+        }
+        this.loadScene(id);
+        return;
+      }
+      this.setScene(id);
+    },
+
     // —— 场景切换 —— 切到新场景就重新拉取真实数据。
     setScene(id) {
       if (this.scene === id) return;
       this.scene = id;
       this.editId = null; this.glyphPickFor = null;
+      // Win+X 走独立文件系统数据源，不调 scan_scene；首次进入懒加载。
+      if (id === 'winx') { if (!this.winxLoaded) this.loadWinx(); return; }
+      // 特殊菜单场景（sendto/dragdrop/shellnew/openwith）走各自 bind，懒加载一次。
+      if (this.specialScenes.some(s => s.id === id)) {
+        this.spItems = [];  // 切场景先清空，避免闪现上一个场景的数据
+        if (!this.spLoaded[id]) this.loadSpecial(id);
+        else this.loadSpecial(id);  // 已加载过也重拉，保证数据新鲜（量小，开销可忽略）
+        return;
+      }
       this.loadScene(id);
     },
     async reloadScene() { await this.loadScene(this.scene); },
+
+    // —— Win+X 菜单 —— 独立文件系统数据源（%LOCALAPPDATA%\...\WinX），非注册表。
+    //    scan_winx 同步返回分组数组（组倒序，Group3 在顶）；启停/新增/删除走异步 bind。
+    // Win+X menu: file-system data source (not registry). scan_winx returns groups
+    // (reversed, Group3 first); toggle/add/del are async binds.
+    async loadWinx() {
+      this.winxLoading = true;
+      try {
+        if (!window.scan_winx) { this.winxGroups = []; this.winxLoaded = true; return; }
+        // bind 返回值已是数组（踩坑 1：勿 JSON.parse）。
+        const arr = await window.scan_winx();
+        const groups = Array.isArray(arr) ? arr : [];
+        // 给每项补前端临时字段：icon 由 extract_icon 异步填。
+        for (const grp of groups) {
+          for (const it of (grp.items || [])) it.icon = '';
+        }
+        this.winxGroups = groups;
+        this.winxLoaded = true;
+        // 后台异步取图标（复用 extract_icon，目标 exe 即图标源）。
+        this.loadWinxIcons(groups);
+      } catch (e) {
+        this.showToast(this.t('toast.load_failed') + ' (' + e + ')', 'err');
+      } finally {
+        this.winxLoading = false;
+      }
+    },
+    // 异步给每个 winx 项取真图标（iconSource=目标 exe）；拿不到回落几何字符。
+    async loadWinxIcons() {
+      if (!window.extract_icon) return;
+      // 遍历 reactive 的 this.winxGroups（proxy），改 it.icon 才被 Vue 捕获。
+      // 参数 groups 是原始数组，改它绕过 proxy → 要点一下才刷。见 loadIcons 注释。
+      const all = [];
+      for (const grp of this.winxGroups) for (const it of (grp.items || [])) all.push(it);
+      await Promise.all(all.map(async (it) => {
+        if (!it.iconSource) return;
+        try {
+          const uri = await window.extract_icon(it.iconSource);
+          if (uri && uri.indexOf('data:image') === 0) it.icon = uri;
+        } catch (e) { /* 静默 */ }
+      }));
+    },
+    // 启停：改扩展名 .lnk↔.lnk.disabled，即时生效，无需二次确认（可逆）。
+    async winxToggle(it) {
+      const next = !it.enabled;
+      const r = await this.callBackend('set_winx_enabled', it.id, next);
+      if (r && r.ok) {
+        it.enabled = next;
+        this.showToast(this.t('toast.ok'), 'ok');
+      } else {
+        this.showToast(this.t('toast.'+ (r?.key || 'winx_failed')), 'err');
+      }
+    },
+    // 删除：送回收站（后端 SHFileOperationW + FOF_ALLOWUNDO），二次确认。
+    winxDel(it) {
+      this.askConfirm(
+        this.t('winx.del_title'),
+        this.t('winx.del_desc', { name: this.escapeHtml(it.label || it.id) }),
+        async () => {
+          const r = await this.callBackend('del_winx_item', it.id);
+          if (r && r.ok) {
+            this.showToast(this.t('winx.del_ok'), 'ok');
+            await this.loadWinx();
+          } else {
+            this.showToast(this.t('toast.'+ (r?.key || 'winx_failed')), 'err');
+          }
+        }
+      );
+    },
+    // 新增项弹层：默认落 Group3（菜单最上组），填目标路径/参数/名字。
+    winxAddOpen() {
+      this.winxAdd = { show:true, group:'Group3', target:'', args:'', name:'' };
+    },
+    async winxAddCommit() {
+      const target = (this.winxAdd.target || '').trim();
+      const name = (this.winxAdd.name || '').trim();
+      if (!target) { this.showToast(this.t('winx.need_target'), 'err'); return; }
+      if (!name) { this.showToast(this.t('winx.need_name'), 'err'); return; }
+      const r = await this.callBackend('add_winx_item',
+        this.winxAdd.group, target, (this.winxAdd.args || '').trim(), name);
+      if (r && r.ok) {
+        this.winxAdd.show = false;
+        this.showToast(this.t('winx.add_ok'), 'ok');
+        await this.loadWinx();
+      } else {
+        this.showToast(this.t('toast.'+ (r?.key || 'winx_failed')), 'err');
+      }
+    },
+
+    // —— 特殊菜单场景（sendto/dragdrop/shellnew/openwith）——
+    //   各走独立 bind（scan_<id>），返回扁平数组，统一存 spItems。启停走
+    //   set_<id>_enabled；sendto 另有 add/del。数据量小，切场景即重拉保证新鲜。
+    // Special-menu scenes: each has its own scan_<id> bind returning a flat list.
+    async loadSpecial(id) {
+      const fnName = 'scan_' + id;
+      this.spLoading = true;
+      this.spItems = [];
+      try {
+        if (!window[fnName]) { this.spItems = []; this.spLoaded[id] = true; return; }
+        // bind 返回值已是数组（踩坑 1：勿 JSON.parse）。
+        const arr = await window[fnName]();
+        const list = Array.isArray(arr) ? arr : [];
+        for (const it of list) it.icon = '';
+        this.spItems = list;
+        this.spLoaded[id] = true;
+        this.sceneCounts[id] = list.length;
+        this.loadSpecialIcons();
+      } catch (e) {
+        this.showToast(this.t('toast.load_failed') + ' (' + e + ')', 'err');
+      } finally {
+        this.spLoading = false;
+      }
+    },
+    // 异步给特殊场景项取真图标（iconSource）。遍历 reactive 的 this.spItems（同 loadIcons）。
+    async loadSpecialIcons() {
+      if (!window.extract_icon) return;
+      const target = this.spItems;
+      await Promise.all(target.map(async (it) => {
+        if (!it.iconSource) return;
+        try {
+          const uri = await window.extract_icon(it.iconSource);
+          if (uri && uri.indexOf('data:image') === 0) it.icon = uri;
+        } catch (e) { /* 静默 */ }
+      }));
+    },
+    async reloadSpecial() { await this.loadSpecial(this.spSceneId); },
+    // 特殊场景启停：调 set_<id>_enabled(itemId, next)，可逆即时。
+    async spToggle(it) {
+      const id = this.spSceneId;
+      if (it.canToggle === false) return;  // openwith 只读，不启停
+      const next = !it.enabled;
+      const r = await this.callBackend('set_' + id + '_enabled', it.id, next);
+      if (r && r.ok) {
+        it.enabled = next;
+        this.showToast(this.t('toast.ok'), 'ok');
+      } else {
+        this.showToast(this.t('toast.'+ (r?.key || 'sp_failed')), 'err');
+      }
+    },
+    // SendTo 新增项弹层。
+    sendtoAddOpen() { this.sendtoAdd = { show:true, target:'', name:'' }; },
+    async sendtoAddCommit() {
+      const target = (this.sendtoAdd.target || '').trim();
+      const name = (this.sendtoAdd.name || '').trim();
+      if (!target) { this.showToast(this.t('sp.need_target'), 'err'); return; }
+      if (!name) { this.showToast(this.t('sp.need_name'), 'err'); return; }
+      const r = await this.callBackend('add_sendto_item', target, name);
+      if (r && r.ok) {
+        this.sendtoAdd.show = false;
+        this.showToast(this.t('sp.add_ok'), 'ok');
+        await this.loadSpecial('sendto');
+      } else {
+        this.showToast(this.t('toast.'+ (r?.key || 'sp_failed')), 'err');
+      }
+    },
+    // SendTo 删除项（送回收站，二次确认）。
+    sendtoDel(it) {
+      this.askConfirm(
+        this.t('sp.del_title'),
+        this.t('sp.del_desc', { name: this.escapeHtml(it.label || it.id) }),
+        async () => {
+          const r = await this.callBackend('del_sendto_item', it.id);
+          if (r && r.ok) {
+            this.showToast(this.t('sp.del_ok'), 'ok');
+            await this.loadSpecial('sendto');
+          } else {
+            this.showToast(this.t('toast.'+ (r?.key || 'sp_failed')), 'err');
+          }
+        }
+      );
+    },
 
     // 从后端 scan_scene 拿真实菜单项。bind 返回值已是数组（踩坑 1：勿 JSON.parse）。
     // Pull real items from scan_scene. Bind already returns the array — no JSON.parse.
@@ -1552,27 +2223,36 @@ const app = createApp({
     // listSnapshotId 防串场景：探测期间用户切了场景就丢弃结果。
     async probeHandlers(list, listSnapshotId) {
       if (!window.probe_handler_menu) return;
-      for (const it of list) {
-        if (it.kind !== 'handler' || !it.clsid) continue;
+      // 后端已异步化（子进程在后台线程跑，不阻塞 UI），前端可并发全部探测，
+      // 总耗时从「串行 N×250ms」压到「单次 ~250ms」。探测结果按 clsid 缓存，
+      // 切回已探测过的场景直接复用，不重复起子进程（修卡顿/加载迟缓）。
+      const targets = list.filter(it => it.kind === 'handler' && it.clsid);
+      await Promise.all(targets.map(async (it) => {
+        // 命中缓存直接用，跳过子进程。
+        const cached = this._probeCache[it.clsid];
+        if (cached !== undefined) {
+          if (this.scene === listSnapshotId && cached) this.applyProbed(it, cached);
+          return;
+        }
         try {
           const r = await window.probe_handler_menu(this.scene, it.clsid);
-          // 切场景了就别再往旧 list 写。
-          if (this.scene !== listSnapshotId) return;
-          if (r && r.ok && Array.isArray(r.items) && r.items.length) {
-            // 真实菜单可能是「单个折叠父项 + children」也可能是「平铺几项」。
-            // 若只有一个带 children 的父项，直接把它的子树挂到 it；否则把整组
-            // items 当作 it 的子菜单（it 自己作折叠父项）。
-            const top = r.items.filter(x => !x.separator);
-            if (top.length === 1 && top[0].children && top[0].children.length) {
-              it.children = this.normalizeProbed(top[0].children);
-              if (top[0].label) it.label = top[0].label;
-            } else {
-              it.children = this.normalizeProbed(r.items);
-            }
-            it.hasSubmenu = it.children.length > 0;
-          }
+          let payload = null;
+          if (r && r.ok && Array.isArray(r.items) && r.items.length) payload = r.items;
+          this._probeCache[it.clsid] = payload;   // null 也缓存，避免反复空探
+          if (this.scene === listSnapshotId && payload) this.applyProbed(it, payload);
         } catch (e) { /* 探测失败静默，保留静态 label */ }
+      }));
+    },
+    // 把一组探测出的原始 items 挂到菜单项 it 上（折叠父项 / 平铺子菜单两种形态）。
+    applyProbed(it, items) {
+      const top = items.filter(x => !x.separator);
+      if (top.length === 1 && top[0].children && top[0].children.length) {
+        it.children = this.normalizeProbed(top[0].children);
+        if (top[0].label) it.label = top[0].label;
+      } else {
+        it.children = this.normalizeProbed(items);
       }
+      it.hasSubmenu = it.children.length > 0;
     },
     // 把 probe 返回的菜单节点规整成前端渲染用的结构（递归）。探测项一律只读。
     normalizeProbed(nodes) {
@@ -1601,13 +2281,19 @@ const app = createApp({
     // 拿不到回落字符（绝不出 emoji）。失败静默——visibleItems 默认渲染 fallback。
     async loadIcons(list) {
       if (!window.extract_icon) return;
-      for (const it of list) {
-        if (!it.iconSource) continue;
+      // 遍历 this.items（reactive 版本）而非传入的 list（原始未代理数组）。
+      // 根因：loadScene 里 `this.items = list` 后，Vue 把数组包成 reactive proxy 存进
+      // this.items，但 list 变量仍指向原始对象；在异步回调里改 list 元素的 it.icon
+      // 绕过了 proxy setter，不触发重渲染 → 表现为「要点一下界面图标才刷出来」。
+      // 改遍历 this.items 拿到的 it 是 proxy，直接赋值即触发响应式。
+      const target = this.items;
+      await Promise.all(target.map(async (it) => {
+        if (!it.iconSource) return;
         try {
           const uri = await window.extract_icon(it.iconSource);
           if (uri && uri.indexOf('data:image') === 0) it.icon = uri;
         } catch (e) { /* 静默 */ }
-      }
+      }));
     },
     // 6 场景项数预取，给 tab 角标。仅在 web bind 可用时执行。
     async prefetchCounts() {

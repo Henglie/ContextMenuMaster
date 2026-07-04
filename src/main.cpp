@@ -20,6 +20,11 @@
 #include "platform/windows/icon_extract.h"
 #include "platform/windows/menu_scanner.h"
 #include "platform/windows/com_menu_probe.h"
+#include "platform/windows/winx_menu.h"
+#include "platform/windows/sendto_menu.h"
+#include "platform/windows/dragdrop_menu.h"
+#include "platform/windows/shellnew_menu.h"
+#include "platform/windows/openwith_menu.h"
 
 #include <windows.h>
 #include <cstdio>
@@ -55,7 +60,23 @@ void print_usage() {
               "                          (verify real resource indices on this PC)\n"
               "  CmmCli probe <scene> <clsid>\n"
               "                          probe an IContextMenu COM handler's live menu\n"
-              "                          (instantiates the DLL; emits UTF-8 JSON tree)");
+              "                          (instantiates the DLL; emits UTF-8 JSON tree)\n"
+              "  CmmCli set-enabled <scene> <0|1> <id>\n"
+              "                          enable(1)/disable(0) a verb or handler by id\n"
+              "                          (writes real HKLM/HKCU hive; needs admin)\n"
+              "  CmmCli winx list        list Win+X menu groups/items as JSON\n"
+              "  CmmCli winx toggle <on|off> <lnkRelPath>\n"
+              "                          enable/disable a Win+X item (renames .lnk)\n"
+              "  CmmCli sendto list      list SendTo items as JSON\n"
+              "  CmmCli sendto toggle <on|off> <fileName>\n"
+              "                          enable/disable a SendTo item (renames)\n"
+              "  CmmCli dragdrop list    list DragDropHandlers as JSON\n"
+              "  CmmCli dragdrop toggle <on|off> <class\\name>\n"
+              "                          enable/disable a drag-drop handler (moves key)\n"
+              "  CmmCli shellnew list    list ShellNew (New menu) items as JSON\n"
+              "  CmmCli shellnew toggle <on|off> <id>\n"
+              "                          enable/disable a New-menu type (moves key; needs admin)\n"
+              "  CmmCli openwith list    list Applications (Open with) apps as JSON");
 }
 
 }  // namespace
@@ -187,6 +208,257 @@ int main(int argc, char** argv) {
         std::string json = cmm::probe_handler_menu_json(scene, argv[3], overridePath);
         // 原始字节写出（stdout 默认文本模式会把 \n 转 \r\n，对 JSON 无害；
         // 但绝不能经 GBK 重编码，故用 fwrite 而非 printf 的 %s）。
+        std::fwrite(json.data(), 1, json.size(), stdout);
+        std::fwrite("\n", 1, 1, stdout);
+        std::fflush(stdout);
+        return 0;
+    }
+
+    if (std::strcmp(cmd, "set-enabled") == 0) {
+        // 启停某菜单项（走 set_item_enabled 真实 hive 写路径，验证踩坑 21 三处修复）。
+        // 用法：CmmCli set-enabled <scene> <on|off> <id>
+        // id 可能是 handler:<名>，含中文/空格 → 与 probe 同理走宽命令行取，避免 argv
+        // 的 ANSI/GBK 丢字符。输出一行 JSON。
+        if (argc < 5) {
+            std::puts("usage: CmmCli set-enabled <scene> <on|off> <id>");
+            return 1;
+        }
+        cmm::MenuScene scene;
+        if (!cmm::scene_from_id(argv[2], &scene)) {
+            std::printf("{\"ok\":false,\"key\":\"bad_scene\"}\n");
+            return 1;
+        }
+        bool enabled = (std::strcmp(argv[3], "on") == 0);
+        // 宽命令行取 id（argv 索引 4：cmd/scene/onoff/id），转 UTF-8。
+        std::string id;
+        {
+            int wargc = 0;
+            LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+            if (wargv) {
+                if (wargc >= 5 && wargv[4] && wargv[4][0]) {
+                    int n = WideCharToMultiByte(CP_UTF8, 0, wargv[4], -1,
+                                                nullptr, 0, nullptr, nullptr);
+                    if (n > 1) {
+                        id.resize(n - 1);
+                        WideCharToMultiByte(CP_UTF8, 0, wargv[4], -1,
+                                            id.data(), n, nullptr, nullptr);
+                    }
+                }
+                LocalFree(wargv);
+            }
+        }
+        std::string json = cmm::set_item_enabled(scene, id, enabled);
+        std::fwrite(json.data(), 1, json.size(), stdout);
+        std::fwrite("\n", 1, 1, stdout);
+        std::fflush(stdout);
+        return 0;
+    }
+
+    if (std::strcmp(cmd, "winx") == 0) {
+        // Win+X 菜单探针（枚举 / 启停）。winx_menu 走文件系统（%LOCALAPPDATA%\
+        // Microsoft\Windows\WinX），非注册表。list 输出分组 JSON（原始 UTF-8 字节，
+        // 不经 GBK，与 probe 同理）；toggle 改扩展名 .lnk<->.lnk.disabled。
+        //   CmmCli winx list
+        //   CmmCli winx toggle <on|off> <lnkRelPath>
+        if (argc < 3) {
+            std::puts("usage: CmmCli winx <list|toggle>");
+            return 1;
+        }
+        if (std::strcmp(argv[2], "list") == 0) {
+            std::string json = cmm::scan_winx_json();
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        if (std::strcmp(argv[2], "toggle") == 0) {
+            // CmmCli winx toggle <on|off> <lnkRelPath>
+            if (argc < 5) {
+                std::puts("usage: CmmCli winx toggle <on|off> <lnkRelPath>");
+                return 1;
+            }
+            bool enabled = (std::strcmp(argv[3], "on") == 0);
+            // id（相对路径）含中文/空格 → 走宽命令行取（argv 索引 4），转 UTF-8。
+            std::string id;
+            {
+                int wargc = 0;
+                LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+                if (wargv) {
+                    if (wargc >= 5 && wargv[4] && wargv[4][0]) {
+                        int n = WideCharToMultiByte(CP_UTF8, 0, wargv[4], -1,
+                                                    nullptr, 0, nullptr, nullptr);
+                        if (n > 1) {
+                            id.resize(n - 1);
+                            WideCharToMultiByte(CP_UTF8, 0, wargv[4], -1,
+                                                id.data(), n, nullptr, nullptr);
+                        }
+                    }
+                    LocalFree(wargv);
+                }
+            }
+            std::string json = cmm::set_winx_item_enabled(id, enabled);
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        std::printf("unknown winx subcommand: %s\n", argv[2]);
+        return 1;
+    }
+
+    // —— 发送到（SendTo）：文件系统机制，仿 winx —— //
+    //   CmmCli sendto list
+    //   CmmCli sendto toggle <on|off> <fileName>
+    if (std::strcmp(cmd, "sendto") == 0) {
+        if (argc < 3) {
+            std::puts("usage: CmmCli sendto <list|toggle>");
+            return 1;
+        }
+        if (std::strcmp(argv[2], "list") == 0) {
+            std::string json = cmm::scan_sendto_json();
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        if (std::strcmp(argv[2], "toggle") == 0) {
+            if (argc < 5) {
+                std::puts("usage: CmmCli sendto toggle <on|off> <fileName>");
+                return 1;
+            }
+            bool enabled = (std::strcmp(argv[3], "on") == 0);
+            // id（文件名）含中文/空格 → 走宽命令行取（索引 4）。
+            std::string id;
+            {
+                int wargc = 0;
+                LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+                if (wargv) {
+                    if (wargc >= 5 && wargv[4] && wargv[4][0]) {
+                        int n = WideCharToMultiByte(CP_UTF8, 0, wargv[4], -1,
+                                                    nullptr, 0, nullptr, nullptr);
+                        if (n > 1) {
+                            id.resize(n - 1);
+                            WideCharToMultiByte(CP_UTF8, 0, wargv[4], -1,
+                                                id.data(), n, nullptr, nullptr);
+                        }
+                    }
+                    LocalFree(wargv);
+                }
+            }
+            std::string json = cmm::set_sendto_enabled(id, enabled);
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        std::printf("unknown sendto subcommand: %s\n", argv[2]);
+        return 1;
+    }
+
+    // —— 拖放处理程序（DragDropHandlers）：handler 搬家启停 —— //
+    //   CmmCli dragdrop list
+    //   CmmCli dragdrop toggle <on|off> <类\name>
+    if (std::strcmp(cmd, "dragdrop") == 0) {
+        if (argc < 3) {
+            std::puts("usage: CmmCli dragdrop <list|toggle>");
+            return 1;
+        }
+        if (std::strcmp(argv[2], "list") == 0) {
+            std::string json = cmm::scan_dragdrop_json();
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        if (std::strcmp(argv[2], "toggle") == 0) {
+            if (argc < 5) {
+                std::puts("usage: CmmCli dragdrop toggle <on|off> <class\\name>");
+                return 1;
+            }
+            bool enabled = (std::strcmp(argv[3], "on") == 0);
+            std::string id;
+            {
+                int wargc = 0;
+                LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+                if (wargv) {
+                    if (wargc >= 5 && wargv[4] && wargv[4][0]) {
+                        int n = WideCharToMultiByte(CP_UTF8, 0, wargv[4], -1,
+                                                    nullptr, 0, nullptr, nullptr);
+                        if (n > 1) {
+                            id.resize(n - 1);
+                            WideCharToMultiByte(CP_UTF8, 0, wargv[4], -1,
+                                                id.data(), n, nullptr, nullptr);
+                        }
+                    }
+                    LocalFree(wargv);
+                }
+            }
+            std::string json = cmm::set_dragdrop_enabled(id, enabled);
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        std::printf("unknown dragdrop subcommand: %s\n", argv[2]);
+        return 1;
+    }
+
+    // —— 新建菜单（ShellNew）：注册表 ShellNew<->-ShellNew 搬家启停 —— //
+    //   CmmCli shellnew list
+    //   CmmCli shellnew toggle <on|off> <id>
+    if (std::strcmp(cmd, "shellnew") == 0) {
+        if (argc < 3) {
+            std::puts("usage: CmmCli shellnew <list|toggle>");
+            return 1;
+        }
+        if (std::strcmp(argv[2], "list") == 0) {
+            std::string json = cmm::scan_shellnew_json();
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        if (std::strcmp(argv[2], "toggle") == 0) {
+            if (argc < 5) {
+                std::puts("usage: CmmCli shellnew toggle <on|off> <id>");
+                return 1;
+            }
+            bool enabled = (std::strcmp(argv[3], "on") == 0);
+            std::string id;
+            {
+                int wargc = 0;
+                LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+                if (wargv) {
+                    if (wargc >= 5 && wargv[4] && wargv[4][0]) {
+                        int n = WideCharToMultiByte(CP_UTF8, 0, wargv[4], -1,
+                                                    nullptr, 0, nullptr, nullptr);
+                        if (n > 1) {
+                            id.resize(n - 1);
+                            WideCharToMultiByte(CP_UTF8, 0, wargv[4], -1,
+                                                id.data(), n, nullptr, nullptr);
+                        }
+                    }
+                    LocalFree(wargv);
+                }
+            }
+            std::string json = cmm::set_shellnew_enabled(id, enabled);
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        std::printf("unknown shellnew subcommand: %s\n", argv[2]);
+        return 1;
+    }
+
+    // —— 打开方式（OpenWith）：只读枚举 Applications —— //
+    //   CmmCli openwith list
+    if (std::strcmp(cmd, "openwith") == 0) {
+        if (argc < 3 || std::strcmp(argv[2], "list") != 0) {
+            std::puts("usage: CmmCli openwith list");
+            return 1;
+        }
+        std::string json = cmm::scan_openwith_json();
         std::fwrite(json.data(), 1, json.size(), stdout);
         std::fwrite("\n", 1, 1, stdout);
         std::fflush(stdout);

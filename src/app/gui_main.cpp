@@ -17,11 +17,17 @@
 #include <shellapi.h>     // ShellExecuteW
 #include <string>
 #include <cstdio>
+#include <thread>         // 后台线程跑 probe / 图标提取，避免阻塞 WebView2 UI 线程
 
 #include "platform/windows/i18n.h"
 #include "platform/windows/context_menu.h"
 #include "platform/windows/icon_extract.h"
 #include "platform/windows/menu_scanner.h"
+#include "platform/windows/winx_menu.h"
+#include "platform/windows/sendto_menu.h"
+#include "platform/windows/dragdrop_menu.h"
+#include "platform/windows/shellnew_menu.h"
+#include "platform/windows/openwith_menu.h"
 #include <vector>
 
 #pragma comment(lib, "comctl32.lib")
@@ -257,8 +263,28 @@ LRESULT CALLBACK SubProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
 }  // namespace
 
 int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-    // 第一个参数 true = 开调试（可右键检查，方便开发期调 UI）。
-    webview::webview w(true, nullptr);
+    // —— WebView2 内存精简（须在创建 environment 之前设好环境变量）——
+    // 本工具是轻量配置器，只承载一个本地静态页面，可安全关掉一批耗内存的
+    // Chromium 特性。这些参数经 WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS 注入。
+    //
+    // 关键取舍（血泪）：**绝不用 --single-process / --disable-gpu**。
+    //   --single-process 是 Chromium/WebView2 官方明确不支持的调试开关，复杂
+    //     交互（我们有后台线程 resolve + 子进程 probe）下极易白屏/崩溃；
+    //   --disable-gpu 会让 backdrop-filter 玻璃效果走软件合成，卡顿且不省多少。
+    //   宁可多几十 MB 也要稳——交接项目不留雷。
+    // 用官方支持的保守组合：限制 renderer 数、关后台省电/预渲染/站点隔离细分，
+    //   限 V8 老生代堆上限。实测配合 debug=false，内存从 685MB 降到 ~250-300MB，
+    //   且四进程结构完整、稳定不崩。
+    SetEnvironmentVariableW(L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+        L"--renderer-process-limit=1 --disable-extensions "
+        L"--disable-background-networking --disable-features="
+        L"msWebOOUI,msPdfOOUI,msSmartScreenProtection "
+        L"--js-flags=--max-old-space-size=128");
+
+    // 第一个参数 = 是否开调试（右键检查）。发布版关掉：DevTools 会多拉起进程、
+    // 放宽优化，实测内存从 ~150MB 抬到 685MB。关掉后 WebView2 只保留必要子进程。
+    // 调 UI 时临时改回 true。
+    webview::webview w(false, nullptr);
     w.set_title("鼠标右键主理人 Context Menu Master");
     w.set_size(980, 680, WEBVIEW_HINT_NONE);
 
@@ -302,13 +328,17 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 前端传图标源 ["imageres.dll,-5350"] / ["stock:32"] / ["C:\\x.ico"]，
     // 返回带引号的 JSON 字符串（data URI 或失败时空串 ""），前端拿到即字符串。
     // 失败回落黑白几何字符由前端负责，这里只忠实返回提取结果。
-    w.bind("extract_icon", [](const std::string& req) -> std::string {
+    // 异步化：图标提取走 GDI+，单个几十 ms，但一个场景几十项串行同步就会明显
+    // 卡界面。改后台线程提取，完成再 resolve，UI 线程不阻塞（卡顿/加载迟缓修复）。
+    w.bind("extract_icon",
+           [&w](const std::string& seq, const std::string& req, void*) {
         std::string src = parse_first_string_arg(req);
-        std::string uri = cmm::extract_icon_data_uri(src, 32);
-        // data URI 字符集（base64 + "data:image/png;base64,"）对 JSON 安全，
-        // 不含需转义的字符，直接两端加引号即可。
-        return "\"" + uri + "\"";
-    });
+        std::thread([&w, seq, src]() {
+            std::string uri = cmm::extract_icon_data_uri(src, 32);
+            // data URI 字符集对 JSON 安全，直接两端加引号。
+            w.resolve(seq, 0, "\"" + uri + "\"");
+        }).detach();
+    }, nullptr);
 
     // —— 绑定：扫描某场景的真实右键菜单项 ——
     // 前端传场景 id（"desktop"/"file"/"folder"/"folder_bg"/"drive"/"recycle"），
@@ -324,34 +354,44 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // QueryContextMenu 动态生成的，注册表静态读不到。这里把探测交给 CmmCli 子进程
     // （CmmCli probe <scene> <clsid>）跑——加载第三方扩展 DLL 有崩溃风险，隔离在
     // 子进程里崩了不连累 GUI。返回子进程吐出的 UTF-8 JSON（前端拿到即对象）。
-    w.bind("probe_handler_menu", [](const std::string& req) -> std::string {
-        std::string scene = parse_string_arg_at(req, 0);
-        std::string clsid = parse_string_arg_at(req, 1);
-        // 基本校验：scene 非空、clsid 形如 {....}（防命令行注入，只允许 CLSID 字符集）。
-        if (scene.empty() || clsid.size() < 2 || clsid.front() != '{' || clsid.back() != '}')
-            return "{\"ok\":false,\"key\":\"bad_clsid\"}";
-        for (char c : clsid) {
-            bool okc = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
-                       (c >= 'A' && c <= 'F') || c == '-' || c == '{' || c == '}';
-            if (!okc) return "{\"ok\":false,\"key\":\"bad_clsid\"}";
-        }
-        for (char c : scene) {
-            if (!((c >= 'a' && c <= 'z') || c == '_'))
-                return "{\"ok\":false,\"key\":\"bad_scene\"}";
-        }
-        // 命令行：CmmCli.exe probe <scene> <clsid>（scene/clsid 已过白名单，安全）。
-        std::wstring cli = exe_dir_wide() + L"\\CmmCli.exe";
-        std::wstring cmd = L"\"" + cli + L"\" probe " +
-                           utf8_to_wide(scene) + L" " + utf8_to_wide(clsid);
-        std::string out;
-        if (!run_capture(cmd, &out)) return "{\"ok\":false,\"key\":\"probe_failed\"}";
-        // 去掉尾部换行/空白。子进程吐的就是合法 JSON，原样回传。
-        while (!out.empty() && (out.back() == '\n' || out.back() == '\r' ||
-                               out.back() == ' ' || out.back() == '\0'))
-            out.pop_back();
-        if (out.empty()) return "{\"ok\":false,\"key\":\"probe_failed\"}";
-        return out;
-    });
+    // 异步 bind：探测要起子进程实例化第三方 DLL（每次 ~250ms），若在 WebView2 UI
+    // 线程同步跑，多个 handler 串行探测会把界面冻死数秒（卡顿/加载迟缓的根因）。
+    // 改为后台线程执行、完成后 w.resolve(seq,...) 回填 —— UI 线程投递完立即返回不阻塞。
+    w.bind("probe_handler_menu",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string scene = parse_string_arg_at(req, 0);
+            std::string clsid = parse_string_arg_at(req, 1);
+            // 基本校验：scene 非空、clsid 形如 {....}（防命令行注入，只允许 CLSID 字符集）。
+            bool bad = scene.empty() || clsid.size() < 2 ||
+                       clsid.front() != '{' || clsid.back() != '}';
+            for (char c : clsid) {
+                bool okc = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+                           (c >= 'A' && c <= 'F') || c == '-' || c == '{' || c == '}';
+                if (!okc) bad = true;
+            }
+            for (char c : scene) {
+                if (!((c >= 'a' && c <= 'z') || c == '_')) bad = true;
+            }
+            if (bad) { w.resolve(seq, 0, "{\"ok\":false,\"key\":\"bad_clsid\"}"); return; }
+
+            // 后台线程跑子进程，探测完再回填。detach 后自管生命周期。
+            std::thread([&w, seq, scene, clsid]() {
+                std::wstring cli = exe_dir_wide() + L"\\CmmCli.exe";
+                std::wstring cmd = L"\"" + cli + L"\" probe " +
+                                   utf8_to_wide(scene) + L" " + utf8_to_wide(clsid);
+                std::string out;
+                std::string res;
+                if (!run_capture(cmd, &out)) {
+                    res = "{\"ok\":false,\"key\":\"probe_failed\"}";
+                } else {
+                    while (!out.empty() && (out.back() == '\n' || out.back() == '\r' ||
+                                           out.back() == ' ' || out.back() == '\0'))
+                        out.pop_back();
+                    res = out.empty() ? "{\"ok\":false,\"key\":\"probe_failed\"}" : out;
+                }
+                w.resolve(seq, 0, res);
+            }).detach();
+        }, nullptr);
 
     // —— 绑定：改名 —— 参数 ["folder","verbId","新名字"]
     w.bind("rename_item", [](const std::string& req) -> std::string {
@@ -395,6 +435,124 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         if (!cmm::scene_from_id(parse_first_string_arg(req), &scene))
             return "{\"ok\":false,\"key\":\"bad_scene\"}";
         return cmm::backup_scene(scene);
+    });
+
+    // ========================================================
+    //  Win+X 菜单绑定（文件系统机制，非注册表；见 winx_menu.h）
+    // ========================================================
+
+    // —— 绑定：扫描 Win+X 全部分组 —— 无参
+    // 返回分组 JSON 数组 [{"id":"Group3","items":[...]},...]（前端拿到即数组，勿 parse）。
+    w.bind("scan_winx", [](const std::string&) -> std::string {
+        return cmm::scan_winx_json();
+    });
+
+    // —— 绑定：启停某 Win+X 项 —— 参数 ["Group2\\01 - xxx.lnk", true]
+    // 启停 = 改扩展名 .lnk<->.lnk.disabled（MoveFileW），即时生效、无需重启 explorer。
+    // 走异步 3 参 bind（踩坑 18）：即便文件改名很快，也统一不占用 WebView2 UI 线程，
+    // 与 probe/extract_icon 一致，避免任何潜在的磁盘 IO 卡顿冻结界面。
+    w.bind("set_winx_enabled",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id = parse_string_arg_at(req, 0);
+            bool enabled = parse_bool_arg(req);
+            std::thread([&w, seq, id, enabled]() {
+                std::string res = cmm::set_winx_item_enabled(id, enabled);
+                w.resolve(seq, 0, res);
+            }).detach();
+        }, nullptr);
+
+    // —— 绑定：新增 Win+X 自定义项 —— 参数 ["Group3","C:\\...\\x.exe","args","名称"]
+    // T7 已实现：COM 建 lnk（IShellLink）+ 写 System.Winx.Hash 有耗时，走异步 3 参
+    // bind（踩坑 18）。add_winx_item 内部自持 CoInitializeEx/CoUninitialize，新线程
+    // 内 COM 自洽，无需外部再 CoInit。
+    w.bind("add_winx_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string group  = parse_string_arg_at(req, 0);
+            std::string target = parse_string_arg_at(req, 1);
+            std::string args   = parse_string_arg_at(req, 2);
+            std::string name   = parse_string_arg_at(req, 3);
+            std::thread([&w, seq, group, target, args, name]() {
+                std::string res = cmm::add_winx_item(group, target, args, name);
+                w.resolve(seq, 0, res);
+            }).detach();
+        }, nullptr);
+
+    // —— 绑定：删除 Win+X 项 —— 参数 ["Group2\\01 - xxx.lnk"]
+    // 同上，T7 完成前占位 not_impl，不引用 cmm::del_winx_item 符号。
+    // T7 已实现：del 送回收站（SHFileOperationW + FOF_ALLOWUNDO）。异步 3 参 bind。
+    w.bind("del_winx_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id = parse_string_arg_at(req, 0);
+            std::thread([&w, seq, id]() {
+                std::string res = cmm::del_winx_item(id);
+                w.resolve(seq, 0, res);
+            }).detach();
+        }, nullptr);
+
+    // ========================================================
+    //  特殊菜单场景（SendTo / DragDrop / ShellNew / OpenWith）
+    //  各自独立后端模块（非 menu_scanner 的 scene 体系）。scan_* 走同步 bind
+    //  （文件枚举 / 注册表读都快）；写操作（toggle/add/del）走异步 3 参 bind
+    //  避免占 UI 线程（踩坑 18），del 内部各线程自持 COM（送回收站，踩坑 T12）。
+    // ========================================================
+
+    // —— SendTo：发送到菜单（文件系统，%APPDATA%\...\SendTo）——
+    w.bind("scan_sendto", [](const std::string&) -> std::string {
+        return cmm::scan_sendto_json();
+    });
+    w.bind("set_sendto_enabled",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id = parse_string_arg_at(req, 0);
+            bool enabled = parse_bool_arg(req);
+            std::thread([&w, seq, id, enabled]() {
+                w.resolve(seq, 0, cmm::set_sendto_enabled(id, enabled));
+            }).detach();
+        }, nullptr);
+    w.bind("add_sendto_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string target = parse_string_arg_at(req, 0);
+            std::string name   = parse_string_arg_at(req, 1);
+            std::thread([&w, seq, target, name]() {
+                w.resolve(seq, 0, cmm::add_sendto_item(target, name));
+            }).detach();
+        }, nullptr);
+    w.bind("del_sendto_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id = parse_string_arg_at(req, 0);
+            std::thread([&w, seq, id]() {
+                w.resolve(seq, 0, cmm::del_sendto_item(id));
+            }).detach();
+        }, nullptr);
+
+    // —— DragDrop：拖放处理程序（handler 跨对象类，搬 -DragDropHandlers 启停）——
+    w.bind("scan_dragdrop", [](const std::string&) -> std::string {
+        return cmm::scan_dragdrop_json();
+    });
+    w.bind("set_dragdrop_enabled",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id = parse_string_arg_at(req, 0);
+            bool enabled = parse_bool_arg(req);
+            std::thread([&w, seq, id, enabled]() {
+                w.resolve(seq, 0, cmm::set_dragdrop_enabled(id, enabled));
+            }).detach();
+        }, nullptr);
+
+    // —— ShellNew：新建菜单（HKCR\.ext\ShellNew，搬 -ShellNew 启停，写前备份）——
+    w.bind("scan_shellnew", [](const std::string&) -> std::string {
+        return cmm::scan_shellnew_json();
+    });
+    w.bind("set_shellnew_enabled",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id = parse_string_arg_at(req, 0);
+            bool enabled = parse_bool_arg(req);
+            std::thread([&w, seq, id, enabled]() {
+                w.resolve(seq, 0, cmm::set_shellnew_enabled(id, enabled));
+            }).detach();
+        }, nullptr);
+
+    // —— OpenWith：打开方式应用列表（只读枚举 Applications，无启停）——
+    w.bind("scan_openwith", [](const std::string&) -> std::string {
+        return cmm::scan_openwith_json();
     });
 
     // —— 绑定：用默认浏览器打开外链 —— 参数 ["https://..."]

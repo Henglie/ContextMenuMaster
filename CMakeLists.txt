@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(ContextMenuMaster
-    VERSION 0.1.0
+    VERSION 0.2.0
     LANGUAGES CXX
 )
 
@@ -58,6 +58,11 @@ add_library(cmm_core STATIC
     src/platform/windows/icon_extract.cpp
     src/platform/windows/menu_scanner.cpp
     src/platform/windows/com_menu_probe.cpp
+    src/platform/windows/winx_menu.cpp
+    src/platform/windows/sendto_menu.cpp
+    src/platform/windows/dragdrop_menu.cpp
+    src/platform/windows/shellnew_menu.cpp
+    src/platform/windows/openwith_menu.cpp
 )
 
 target_include_directories(cmm_core PUBLIC
@@ -87,6 +92,18 @@ add_executable(ContextMenuMaster WIN32
     src/app/gui_main.cpp
 )
 target_link_libraries(ContextMenuMaster PRIVATE cmm_core)
+
+# UAC 提权清单：MSVC 把 .manifest 当输入直接嵌进 exe，启动即请求管理员。
+# 经典菜单项分散在 HKLM（所有用户）+ HKCU，第三方项禁用标记常在 HKLM，
+# 纯用户态改不动 → 提权后可写真实位置，支持所有项编辑（见 app.manifest 说明）。
+if(MSVC)
+    target_sources(ContextMenuMaster PRIVATE src/app/app.manifest)
+    # 链接器默认会自动生成一份 asInvoker 的 UAC manifest 片段，mt.exe 再把它与
+    # 我们的 app.manifest（requireAdministrator）合并时，两处 level 不一致 →
+    # 报 c1010001「Values of attribute "level" not equal」。用 /MANIFESTUAC:NO
+    # 关掉链接器自带的 UAC 片段，UAC 级别完全由 app.manifest 提供，冲突消除。
+    target_link_options(ContextMenuMaster PRIVATE /MANIFESTUAC:NO)
+endif()
 
 # webview 单头库 + WebView2 SDK 头文件路径（结构同 FairySave）。
 # 代码 include 写的是 "webview/webview.h"，故 include 根指向 third_party（上一级），

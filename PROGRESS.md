@@ -1,7 +1,7 @@
 # PROGRESS · 鼠标右键主理人 ContextMenuMaster
 
 > 项目进度与 AI 接管文档。**人看的介绍在 [README.md](./README.md)，本文件只给接手的 AI / 开发者。**
-> 中文名「鼠标右键主理人」，英文名 Context Menu Master。最后更新：2026-06-29。
+> 中文名「鼠标右键主理人」，英文名 Context Menu Master。最后更新：2026-07-04（v0.2beta）。
 
 ---
 
@@ -28,6 +28,7 @@ Windows 11 右键菜单主理工具。可视化改名换图标 + 列表批量管
 - 架构 **Core-Shell**，`src/platform/windows` 是 Win32 特权层。
 - **i18n：后端给英文 key/语言标签，前端三语字典翻译，后端绝不返回中文**。新增文案要 zh-CN/zh-TW/en 三处同步补。
 - 要 GUI 不要命令行（CLI 仅调试）。目标 Win10/11（经典菜单接管是 Win11 特性）。
+- **提权模型（已改）**：GUI 启动即 `requireAdministrator`（`src/app/app.manifest`，链接器 `/MANIFESTUAC:NO` 让它独占，见踩坑 14）。经典菜单项分散在 `HKLM\SOFTWARE\Classes`（所有用户，第三方软件多写这）+ `HKCU\Software\Classes`；提权后直接写项**真实所在的 hive**，不再走旧的「纯 HKCU 覆盖层」。这是支持「所有项都能开关/改名」的前提（作者本就打算管理员运行）。
 
 ---
 
@@ -91,6 +92,19 @@ ContextMenuMaster/
 11. **注册表 verb label 三档兜底，缺一环就乱码**：MUIVerb / 默认值都可能是 `@dll,-id` 间接资源，必须 `SHLoadIndirectString` 解，且解前预展开 `%systemroot%`（混合大小写会让它直接失败）。默认值漏走 resolve 就会把 `@...dll,-10` 当 label 显示。三档：MUIVerb resolve → 默认值 resolve → humanize 键名（去前导 `.`、驼峰拆词）。handler 的 label 若是 CLSID 去 `HKCR\CLSID\{...}` 读 LocalizedString/默认值。见 `menu_scanner.cpp:resolve_indirect_string`/`read_verb_generic`/`humanize_verb_name`。另：label 落定前过 `clean_label`（trim 含全角空格 U+3000、去零宽 U+200B/U+FEFF、去尾部 ` Class` COM 噪音）；id 保留真实键名不动。Windows 内建项裸键名/英文 COM 描述由前端 `BUILTIN_NAMES` 三语兜底。
 12. **真实 COM 动态菜单探测（IContextMenu 扩展），三个关键点**：① `IShellExtInit::Initialize(pidlFolder, pdtobj, hkeyProgID)` 三参都要对——选中对象类（file/folder/drive）的 `pidlFolder` 必须是**父文件夹** pidl（`ILCloneFull`+`ILRemoveLastID`，不是对象自身绝对 pidl），背景类才传文件夹自身；`hkeyProgID` 传场景类键（`HKCR\*`/`Directory` 等）。宽容 handler（7-Zip）传错也忽略，严格的直接 `E_INVALIDARG`。② **加载第三方 DLL 有崩溃/挂死风险，必须在 `CmmCli probe` 子进程跑**（崩了只崩子进程），GUI 用管道按 UTF-8 原始字节读（probe 输出走 `fwrite` 不经 `SetConsoleOutputCP` 的 GBK，否则坏 JSON）。③ 子菜单先发 `WM_INITMENUPOPUP`（`IContextMenu2::HandleMenuMsg`）触发懒填充再遍历 HMENU，顶层空时降级 `CMF_NORMAL` 重试。见 `com_menu_probe.cpp`。**夸克AI 例外**：三参全对仍 `E_INVALIDARG`，是厂商反集成（疑似校验调用方是否真 explorer / 要 `IObjectWithSite` 站点），属夸克自身限制非框架缺陷，已退回前端友好名兜底。**别再为夸克空转**——啃它得逆向 quarkshellext.dll 或起真窗口喂站点，性价比极低。
 13. **CSS：`<span>` 开关只显示一颗球的根因**——`.switch` 是 span 默认 `display:inline`，width/height 对 inline 无效，38×22 轨道没撑开，只剩内部 absolute 的 `.knob` 可见。修：`display:inline-block` + `vertical-align:middle`。任何用 span 当定尺寸控件的都要注意。
+14. **UAC 提权 manifest 与链接器冲突（c1010001）**：CMake/link 默认给 GUI 生成 `asInvoker` 的 UAC manifest 片段，与自带 `app.manifest` 的 `requireAdministrator` 合并时 mt.exe 报 `level not equal`。修：CMake 给 GUI target 加 `/MANIFESTUAC:NO`，让链接器不生成默认片段，`app.manifest` 完全接管（requireAdministrator + DPI PerMonitorV2 + activeCodePage UTF-8）。验证：`(Get-Item exe).VersionInfo` 不行，得从 exe 资源提 RT_MANIFEST 看 level 是否 requireAdministrator。
+15. **「怎么点都开不了」根因 = 停用标记在 HKLM，纯 HKCU 删不掉**：123云盘/ToDesk/迅雷等第三方 verb 的 `LegacyDisable` 写在 `HKLM\SOFTWARE\Classes`，旧版纯 HKCU 覆盖层只删得掉 HKCU 那份，HKLM 那份还在 → 合并视图仍禁用。修：提权后启用时**两个 hive 的 LegacyDisable 都删**；停用写项真实所在的主 hive（`primary_write_hive`：HKLM 有就写 HKLM）。见 `menu_scanner.cpp:set_item_enabled`/`locate_verb`/`open_verb_in_hive`。
+16. **改名不生效 = MUIVerb 优先于默认值**：verb 若有 `MUIVerb`，Windows 显示时它优先于默认值，只改默认值白改。修：`set_verb_default` 写默认值同时 `RegDeleteValueW(MUIVerb)`，让默认值成唯一显示源。
+17. **handler 启停 = disabled mirror 搬家**：COM handler 停用不是改值，是把子键从 `shellex\ContextMenuHandlers\<name>` 整树搬到同级 `-ContextMenuHandlers\<name>`（`-` 前缀 shell 不枚举）。故 scan 必须**同时扫两个根**，停用镜像里的标 `enabled=false`，否则一停用就从列表消失再也开不回来。见 `menu_scanner.cpp:move_handler`/`copy_key_tree`/`scan_scene` 的双根扫描。
+18. **WebView2 bind 回调同步阻塞 UI 线程（卡顿根因）**：webview 单头库的 `sync bind` 在 WebView2 UI 线程里同步执行 `fn(req)`（见库 line 2498）。probe 每个起子进程冷启 COM ~250ms，file 场景 14 个 handler 串行探测 ≈3.5s 全程冻结界面。修：probe/extract_icon 改**异步 3 参 bind**，后台 `std::thread` 跑完再 `w.resolve(seq,...)`，UI 线程投递即返回；前端配合 `Promise.all` 并发 + 按 clsid 缓存（切场景不重探）。见 `gui_main.cpp` 异步 bind、`index.html:probeHandlers`。
+19. **主题/语言弹层被下方内容盖住**：`.header` 无层叠上下文，popover 的 `z-index:30` 只在 header 内有意义；content 里的 `.glass` 卡片带 `backdrop-filter` 会各自新建 stacking context，DOM 靠后先天压过 header 弹层。修：`.header` 加 `position:relative; z-index:20`，让整个 header（含弹层）作为一个高层栈压过 content。凡 `backdrop-filter` + 绝对定位弹层都要留意这类跨容器层叠。
+20. **WebView2 内存无法到参考项目的 50MB（架构差异，非 bug）**：参考项目 ContextMenuMgr 是纯 WPF（无 Chromium），本项目是 WebView2（内嵌 Edge/Chromium），内存下限受框架决定。优化手段：① `debug=false` 关 DevTools（实测从 685MB → ~260MB，**这是最大头**）；② `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` 注入 `--disable-extensions --disable-features=...` 等安全参数。单实例干净测 ~337MB / 6 子进程。**别用 `--single-process`/`--disable-gpu`**：官方不支持，复杂交互会白屏/崩溃，之前试过已回退。要再降只能换 UI 框架（重写）。测内存务必先 `taskkill //F //IM ContextMenuMaster.exe` 清残留实例，否则多实例叠加数字虚高。
+19. **内存优化只能到 ~337MB，到不了参考项目 50MB（架构差异，非 bug）**：本项目 WebView2 = 内嵌 Chromium，参考项目 ContextMenuMgr 是纯 WPF（无 Chromium）才 50MB。降内存两招：① `webview(false,...)` 关 DevTools（debug=true 会多拉进程 + 放宽优化，实测 685MB→260MB）；② `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` 注入 `--disable-extensions --disable-features=...` 等**安全**参数。**红线：别用 `--single-process`/`--disable-gpu`**——WebView2 官方不支持，复杂交互下白屏/崩溃，交接不留雷。单实例实测 6 子进程 337MB，稳定不崩。见 `gui_main.cpp:WinMain` 开头。
+20. **弹层被下方内容覆盖（深浅/语言菜单）**：`.header` 无独立 stacking context 时，popover 的 z-index 只在 header 内有效，而 `.content` 里的 `.glass` 卡片各自 `backdrop-filter` 建栈、DOM 靠后绘制盖住弹层。修：给 `.header` 建高层级独立栈（`position:relative; z-index`）。见 `index.html` .header 样式。
+21. **提权写路径三处「假失败/停用不生效」隐患（已真机验证闭环）**：① handler 启停 `move_handler` 原用 `||` 短路，HKLM 搬成功就跳过 HKCU；handler 同时存在两 hive 时停用只搬一份→合并视图仍启用。修：两 hive 都尝试搬，任一成功即成。② verb 停用只写主 hive，若 HKCU 覆盖层有同名无 `LegacyDisable` 项→HKCU 优先→看着没停用（与启用「两 hive 都删」不对称）。修：停用也两 hive 对称写（仅对已存在的 verb 写，不建空壳）。③ `do_backup` 硬超时 5s，`*`(file) 场景导出 `HKCR\*` 整树易超时→拿到 259 STILL_ACTIVE≠0→误报 `backup_failed` 挡写。修：超时提到 30s。见 `menu_scanner.cpp:set_item_enabled`/`move_handler`/`do_backup`。**验证**：`CmmCli set-enabled` 真机跑通——123pan（HKLM+HKCU 双 LegacyDisable 样本）对称删/写、SD360 handler 停用/启用往返 CLSID 不丢、备份每次 ok（30s 修复隐式过），幂等不报假失败。
+22. **`handler_at_target` 匿名 namespace 内重复定义两次（C2084）**：踩坑 21 那批「静态预审」代码把同签名函数写了两遍 → 编译直接 fail，即从没编译过。修：删重复定义留一份。**教训**：静态预审的代码务必先编译过再声称「就位」，否则连语法都不保。
+23. **Win+X 菜单是文件系统不是注册表**：项在 `%LOCALAPPDATA%\Microsoft\Windows\WinX\Group1~3\*.lnk`，启停=改扩展名 `.lnk`↔`.lnk.disabled`，菜单分组倒序（Group3 在顶）。新增自定义项必须给 lnk 写合法 `System.Winx.Hash`（GUID `{FB8D2D7B-...}` PID 2），否则 explorer 忽略不显示。hash 算法：`HashData`(shlwapi) 对 `(泛化路径+参数+"do not prehash links.  this should only be done by the user.")` 全小写的 UTF-16 字节算，取前 4 字节 UInt32。两个非显然点：① 三个 PropertyKey **硬编码**别用 `PSGetPropertyKeyFromName`（Win10 不可靠）；② 魔法盐串里 `links.` 后是**两个空格**，错一个字节 hash 就废。泛化路径映射 %ProgramFiles%/System32/Windows→特定 GUID。见 `winx_menu.cpp:write_winx_hash`。
+24. **多窗口并发写丢改动（T8 的 CLI 分支被覆盖回退）**：多 Agent 各开独立窗口改同一批文件时，两个 Agent 前后脚改 `main.cpp`（一个加 winx CLI 分支、另一个改别处后整文件回写），后写者用的是不含前者改动的旧快照 → 前者的 winx list/toggle 分支被静默抹掉。表现：`gui_main.cpp` 的 winx bind 在（另一文件没被覆盖）、`winx_menu.cpp` 在，唯独 CLI 入口的 winx 分支消失，`CmmCli winx` 报 `unknown command`。**根因**：Agent 回执自报「已加 XXX」不等于磁盘现状，跨窗口后写可能覆盖。**教训**：① 关键交付以真跑/grep 磁盘为准，别信回执自述（同踩坑 22）；② 独立执行体交叉验证能逮住单 Agent 自查不到的回退（本例是专派的只读验证 Agent 揪出 CLI 缺失）；③ 改同一文件的任务尽量串行或物理隔离到不同文件。修：M 重新补 `main.cpp` winx 分支，真跑 `CmmCli winx list` 验证枚举 17 项、组倒序正确。
 
 ---
 
@@ -98,7 +112,7 @@ ContextMenuMaster/
 
 - VS2022「打开本地文件夹」选本目录 → 读 `CMakePresets.json` → 选预设。命令行（vcvars64 下）：`cmake --preset windows-debug && cmake --build build/debug`。
 - 产物：`build/<cfg>/bin/ContextMenuMaster.exe`（GUI）+ `CmmCli.exe`（调试）。
-- CLI 调试：`lang`/`status`/`enable`/`restore`/`toggle`/`enable-norefresh`/`scan <scene>`/`probe <scene> <clsid> [真实文件路径]`。
+- CLI 调试：`lang`/`status`/`enable`/`restore`/`toggle`/`enable-norefresh`/`scan <scene>`/`probe <scene> <clsid> [真实文件路径]`/`set-enabled <scene> <on|off> <id>`（启停项，验证提权写路径，id 走宽命令行支持中文/空格）。
 
 ---
 
@@ -108,7 +122,9 @@ ContextMenuMaster/
 - [x] i18n 系统语言检测；输出 zh-CN/zh-TW/en 标签。
 - [x] Win11 经典菜单接管：HKCU 空 InprocServer32 写/删，状态判定严谨，enable/restore/toggle 幂等返回 `MenuResult` 四态。
 - [x] 分离子进程优雅重启 Explorer（修复旧版卡死事故，根因见踩坑 10）。
-- [x] 真实菜单扫描 `menu_scanner`：6 场景 verb（明文，可改名/图标/启停）+ handler（COM 扩展），label 三档兜底解析（踩坑 11），verb 级联子菜单静态展开。写回走 HKCU 覆盖层，写前自动 `reg.exe export` 备份到 `%LOCALAPPDATA%\ContextMenuMaster\backups\`。SYS 标记按 InprocServer32 DLL 是否在 `%SystemRoot%` 下精准判定（不再误标第三方）。
+- [x] 真实菜单扫描 `menu_scanner`：6 场景 verb（明文，可改名/图标/启停）+ handler（COM 扩展，含 disabled mirror 双根扫描，踩坑 17），label 三档兜底解析（踩坑 11），verb 级联子菜单静态展开，handler 图标源从 CLSID DefaultIcon/InprocServer32 提取。**写回走真实 hive**（提权后 HKLM/HKCU 智能选择，`primary_write_hive`，踩坑 15/16），写前自动 `reg.exe export` 备份到 `%LOCALAPPDATA%\ContextMenuMaster\backups\`。SYS 标记按 InprocServer32 DLL 是否在 `%SystemRoot%` 下精准判定（不再误标第三方）。
+- [x] **UAC 提权**：`app.manifest` requireAdministrator，启动即请求管理员，才能写 HKLM 真实位置（踩坑 14）。
+- [x] **异步 bind**：probe/extract_icon 后台线程执行 + `w.resolve` 回填，不阻塞 UI（踩坑 18）。
 - [x] COM 扩展真实菜单探测 `com_menu_probe`（核心功能，见踩坑 12）：子进程隔离跑 `QueryContextMenu`，递归 dump 任意深度菜单树。7-Zip/百度云/SD360 实测成功。
 - [x] icon_extract：系统图标/资源/.ico → PNG base64 data URI。
 - [x] GUI 入口 + bind 全套；CmmCli 调试探针（含 scan/probe）；CMake 工程（core 静态库 + GUI + CLI，/utf-8 /EHsc + Release 瘦身）。
@@ -128,13 +144,18 @@ ContextMenuMaster/
 - [x] Windows 内建项三语友好名兜底 `BUILTIN_NAMES`（verb 按 id、handler 按清洗后 label，含夸克AI）。
 - [x] 列表操作按钮统一 FairyGlass 玻璃风（玻璃填充+描边+圆角+图标，hover 提蓝边、active 微缩）。
 - [x] 启停开关关态可辨（深底+明描边+inset，修了只显示一颗球的 bug，见踩坑 13）；主题/语言弹层叠 86% 深底防透明看不清。
+- [x] 主题/语言弹层被下方内容盖住的 bug：`.header` 加 `position:relative; z-index:20` 建独立层叠上下文，压过 content 里各自成栈的 `.glass` 卡片（backdrop-filter 会新建 stacking context）。见踩坑 19。
 
 ---
 
 ## ▍待办
 
+- [~] **场景补全（对标参考项目，恒烈要「以上全部」）**：顶层导航已拍平（6 场景 + Win+X 平级）。A 批注册表主场景**已落地**——`menu_scanner` 加 AllFileSystemObjects(`AllFilesystemObjects`,id=allfsobjects)、Computer(此电脑 CLSID,id=computer,无 handler)、Library(`LibraryFolder`,id=library)，enum+5 switch 补 case，CLI 真跑验证(allfsobjects=11/computer=2/library=1 项)。**注：folder 场景后端本就映射 `Directory\shell`，与参考项目 Directory 是同一根，不重复加**。B 批（特殊菜单，各独立模块）**已落地 + CLI 真跑验证**：`sendto_menu`(仿 winx 文件系统机制,无 hash,枚举/启停/增删,真跑 6 项)、`shellnew_menu`(遍历 HKCR\.ext\ShellNew,`ShellNew`↔`-ShellNew` 搬家停用,写前 reg 备份,真跑多扩展名友好名解析)、`dragdrop_menu`(handler-only 跨 Directory/Folder/Drive/AllFilesystemObjects 聚合,复用 move_handler 双 hive 搬家,真跑 9 项)、`openwith_menu`(只读枚举 Applications,canToggle=false,启停有风险暂不做)。C 批文件类型子场景 8 个(需动态 UI 输入,最后做)。前端(T19)：4 场景 + 三语文案 + 统一特殊菜单视图(sendto 增删,openwith 只读)已接,10 个 GUI bind,cp 通。**待恒烈真机 GUI 目视 + 启停/增删验证**。
+- [x] **提权写路径真机验证（踩坑 21 三处修复）**：加 `CmmCli set-enabled` 命令脱离 GUI 驱动 `set_item_enabled`，管理员下实测通过——① 123pan（HKLM+HKCU 双 LegacyDisable 样本）启用两 hive 都删、停用两 hive 对称写，scan enabled 正确翻转；② SD360 handler 停用/启用往返，CLSID 随树搬家不丢，双根扫描认出停用镜像；③ 每次写前 do_backup(HKCR\* 整树) 均 ok，30s 超时修复隐式通过。**另修一真 bug：`handler_at_target` 在匿名 namespace 重复定义两次（C2084），踩坑 21 那批代码原来从没编译过。** 遗留小瑕疵：找不到的 handler 返 `registry_failed`、verb 返 `not_found`，语义不统一（均失败态无副作用，待定要否对齐）。GUI 切场景卡顿另见踩坑 18 已改，未在此轮复测。
+- [~] **提权改造 GUI 真机复测**：写路径已用 CLI 验通（上条）。仍待启 GUI 走一遍：停用后菜单实际不再出现、启用后回来、切场景不卡（踩坑 18 异步 bind 效果）。
 - [ ] **verb 级联子菜单真机验证**：本机无 WinRAR 压缩组/TortoiseGit 这类样本，静态展开逻辑就位但没出过真实实例，装一个验证飞出渲染。
 - [ ] **列表视图折叠父项**：暂未对折叠/COM 父项做子项展开或标注（待定要不要加）。
+- [~] **Win+X 菜单管理（新功能，移植参考项目）**：后端 `winx_menu.{h,cpp}` 已完成——枚举 `%LOCALAPPDATA%\Microsoft\Windows\WinX\Group1~3` 的 `.lnk`/`.lnk.disabled`（IShellLink 读目标）、启停改扩展名、hash 算法移植（`HashData` 对「泛化路径+参数+固定盐」小写 UTF-16 算 CRC，写 `System.Winx.Hash` VT_UI4）、新增（IShellLink 建 lnk + 写 hash）/删除（送回收站）。CLI 探针 + GUI bind + 前端场景视图在接（多 Agent T8/T10）。真机待验：新增项 hash 写对后 Win+X 菜单能否真实显示。
 - [ ] Win11 IExplorerCommand 稀疏包(MSIX)扫描 + 写入（README 已声明开发中）。这是独立大功能：要 `IExplorerCommand` COM 组件 + 稀疏包打包注册，不是改注册表能成，与权限无关。
 - [x] 编译 x64 Release + 打包发行（v0.1.0，随 GitHub Release 附 zip）。x86 Release 待出（需 vcvars32 环境）。
 - [x] git 初始化（Henglie 身份，零 AI 痕迹）+ 推送 GitHub（main 分支，ssh）。

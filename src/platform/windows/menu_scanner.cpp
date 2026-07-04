@@ -295,6 +295,10 @@ const wchar_t* scene_shell_root(MenuScene scene) {
         case MenuScene::Drive:               return L"Drive\\shell";
         case MenuScene::RecycleBin:
             return L"CLSID\\{645FF040-5081-101B-9F08-00AA002F954E}\\shell";
+        case MenuScene::AllFileSystemObjects: return L"AllFilesystemObjects\\shell";
+        case MenuScene::Computer:
+            return L"CLSID\\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\\shell";
+        case MenuScene::Library:             return L"LibraryFolder\\shell";
     }
     return L"";
 }
@@ -310,6 +314,10 @@ const wchar_t* scene_handler_root(MenuScene scene) {
             return L"Directory\\Background\\shellex\\ContextMenuHandlers";
         case MenuScene::Drive:               return L"Drive\\shellex\\ContextMenuHandlers";
         case MenuScene::RecycleBin:          return L"";
+        case MenuScene::AllFileSystemObjects:
+            return L"AllFilesystemObjects\\shellex\\ContextMenuHandlers";
+        case MenuScene::Computer:            return L"";
+        case MenuScene::Library:             return L"LibraryFolder\\shellex\\ContextMenuHandlers";
     }
     return L"";
 }
@@ -325,6 +333,10 @@ const wchar_t* scene_backup_root(MenuScene scene) {
         case MenuScene::Drive:               return L"Drive";
         case MenuScene::RecycleBin:
             return L"CLSID\\{645FF040-5081-101B-9F08-00AA002F954E}";
+        case MenuScene::AllFileSystemObjects: return L"AllFilesystemObjects";
+        case MenuScene::Computer:
+            return L"CLSID\\{20D04FE0-3AEA-1069-A2D8-08002B30309D}";
+        case MenuScene::Library:             return L"LibraryFolder";
     }
     return L"";
 }
@@ -518,18 +530,24 @@ const char* scene_id(MenuScene scene) {
         case MenuScene::DirectoryBackground: return "folder_bg";
         case MenuScene::Drive:               return "drive";
         case MenuScene::RecycleBin:          return "recycle";
+        case MenuScene::AllFileSystemObjects: return "allfsobjects";
+        case MenuScene::Computer:            return "computer";
+        case MenuScene::Library:             return "library";
     }
     return "";
 }
 
 bool scene_from_id(const std::string& id, MenuScene* out) {
     if (!out) return false;
-    if (id == "desktop")   { *out = MenuScene::DesktopBackground;   return true; }
-    if (id == "file")      { *out = MenuScene::AllFiles;            return true; }
-    if (id == "folder")    { *out = MenuScene::Directory;           return true; }
-    if (id == "folder_bg") { *out = MenuScene::DirectoryBackground; return true; }
-    if (id == "drive")     { *out = MenuScene::Drive;               return true; }
-    if (id == "recycle")   { *out = MenuScene::RecycleBin;          return true; }
+    if (id == "desktop")      { *out = MenuScene::DesktopBackground;   return true; }
+    if (id == "file")         { *out = MenuScene::AllFiles;            return true; }
+    if (id == "folder")       { *out = MenuScene::Directory;           return true; }
+    if (id == "folder_bg")    { *out = MenuScene::DirectoryBackground; return true; }
+    if (id == "drive")        { *out = MenuScene::Drive;               return true; }
+    if (id == "recycle")      { *out = MenuScene::RecycleBin;          return true; }
+    if (id == "allfsobjects") { *out = MenuScene::AllFileSystemObjects; return true; }
+    if (id == "computer")     { *out = MenuScene::Computer;            return true; }
+    if (id == "library")      { *out = MenuScene::Library;             return true; }
     return false;
 }
 
@@ -558,95 +576,121 @@ std::vector<MenuItem> scan_scene(MenuScene scene) {
     //   3) 兜底 humanize（DesktopSlideshow -> Desktop Slideshow）。
     // Handler label resolution: CLSID → HKCR\CLSID\{...}\(default + LocalizedString)
     // → readable key name → humanized key name. Never expose raw CLSID/PascalCase.
+    // —— handler 项：枚举 shellex\ContextMenuHandlers（启用）与 -ContextMenuHandlers
+    //    （停用镜像）两个根。停用的 handler 被搬进 '-' 前缀根，若不扫这里，用户一旦
+    //    停用某 handler 它就从列表消失、再也开不回来。故两个根都扫，disabled 的标
+    //    enabled=false，前端开关据此还原。
     std::wstring handlerRoot = scene_handler_root(scene);
     if (!handlerRoot.empty()) {
-        HKEY hHandlers = nullptr;
-        if (RegOpenKeyExW(HKEY_CLASSES_ROOT, handlerRoot.c_str(), 0,
-                          KEY_ENUMERATE_SUB_KEYS, &hHandlers) == ERROR_SUCCESS) {
+        // 推出停用镜像根：ContextMenuHandlers -> -ContextMenuHandlers。
+        std::wstring disHandlerRoot = handlerRoot;
+        size_t dpos = disHandlerRoot.rfind(L"ContextMenuHandlers");
+        if (dpos != std::wstring::npos) disHandlerRoot.insert(dpos, L"-");
+
+        // 读一个 handler 子键为 MenuItem。enabled 标记该 handler 是否处于启用位置。
+        auto read_handler = [&](const std::wstring& rootPath, const std::wstring& name,
+                                bool enabled) -> MenuItem {
+            MenuItem item;
+            item.kind = MenuItemKind::Handler;
+            item.id = "handler:" + wide_to_utf8(name);
+            item.enabled = enabled;
+            item.canRename = false;
+            item.canChangeIcon = false;
+            item.canToggle = true;
+            item.regPath = "HKEY_CLASSES_ROOT\\" + wide_to_utf8(rootPath + L"\\" + name);
+
+            std::wstring clsid;
+            std::wstring handlerPath = rootPath + L"\\" + name;
+            HKEY hHand = nullptr;
+            if (RegOpenKeyExW(HKEY_CLASSES_ROOT, handlerPath.c_str(), 0,
+                              KEY_QUERY_VALUE, &hHand) == ERROR_SUCCESS) {
+                reg_read_string(hHand, nullptr, &clsid);
+                RegCloseKey(hHand);
+            }
+
+            std::wstring candidate = (name.size() >= 2 && name[0] == L'{') ? name
+                                   : (clsid.size() >= 2 && clsid[0] == L'{') ? clsid
+                                   : L"";
+            item.system = is_system_handler_by_clsid(candidate);
+            item.clsid = wide_to_utf8(candidate);
+
+            std::wstring label;
+            if (!candidate.empty()) {
+                std::wstring clsidKey = L"CLSID\\" + candidate;
+                HKEY hClsid = nullptr;
+                if (RegOpenKeyExW(HKEY_CLASSES_ROOT, clsidKey.c_str(), 0,
+                                  KEY_QUERY_VALUE, &hClsid) == ERROR_SUCCESS) {
+                    std::wstring loc;
+                    if (reg_read_string(hClsid, L"LocalizedString", &loc) && !loc.empty()) {
+                        std::wstring r = resolve_indirect_string(loc);
+                        if (!r.empty() && r[0] != L'@') label = r;
+                    }
+                    if (label.empty()) {
+                        std::wstring def;
+                        if (reg_read_string(hClsid, nullptr, &def) && !def.empty()) {
+                            if (def[0] != L'@') label = def;
+                            else {
+                                std::wstring r = resolve_indirect_string(def);
+                                if (!r.empty() && r[0] != L'@') label = r;
+                            }
+                        }
+                    }
+                    RegCloseKey(hClsid);
+                }
+            }
+            if (label.empty() && (name.empty() || name[0] != L'{')) label = name;
+            if (label.empty() || (label.size() >= 2 && label[0] == L'{')) {
+                label = humanize_verb_name(name);
+                if (!label.empty() && label[0] == L'{') label = L"";
+            }
+            if (label.empty()) label = L"COM Extension";
+            item.label = wide_to_utf8(clean_label(label));
+
+            // handler 图标源：注册表 handler 项本身无 Icon 值，故从 CLSID 找——
+            // 优先 HKCR\CLSID\{..}\DefaultIcon 默认值（明文图标 spec），
+            // 退回 InprocServer32 的 DLL 路径（用其第 0 个图标）。前端拿去 extract_icon
+            // 提取真实 PNG，取不到再回落几何字符。修「handler 全是 ▸ 占位」。
+            if (!candidate.empty()) {
+                std::wstring iconSpec;
+                std::wstring diKey = L"CLSID\\" + candidate + L"\\DefaultIcon";
+                HKEY hDi = nullptr;
+                if (RegOpenKeyExW(HKEY_CLASSES_ROOT, diKey.c_str(), 0,
+                                  KEY_QUERY_VALUE, &hDi) == ERROR_SUCCESS) {
+                    std::wstring di;
+                    if (reg_read_string(hDi, nullptr, &di) && !di.empty() && di != L"%1")
+                        iconSpec = expand_env(di);
+                    RegCloseKey(hDi);
+                }
+                if (iconSpec.empty()) {
+                    std::wstring inpKey = L"CLSID\\" + candidate + L"\\InprocServer32";
+                    HKEY hInp = nullptr;
+                    if (RegOpenKeyExW(HKEY_CLASSES_ROOT, inpKey.c_str(), 0,
+                                      KEY_QUERY_VALUE, &hInp) == ERROR_SUCCESS) {
+                        std::wstring dll;
+                        if (reg_read_string(hInp, nullptr, &dll) && !dll.empty())
+                            iconSpec = expand_env(dll) + L",0";
+                        RegCloseKey(hInp);
+                    }
+                }
+                if (!iconSpec.empty()) item.iconSource = wide_to_utf8(iconSpec);
+            }
+            return item;
+        };
+
+        // 扫某根下全部 handler 子键。
+        auto scan_handler_root = [&](const std::wstring& rootPath, bool enabled) {
+            HKEY hHandlers = nullptr;
+            if (RegOpenKeyExW(HKEY_CLASSES_ROOT, rootPath.c_str(), 0,
+                              KEY_ENUMERATE_SUB_KEYS, &hHandlers) != ERROR_SUCCESS) return;
             std::vector<std::wstring> names = enum_subkeys(hHandlers);
             RegCloseKey(hHandlers);
             for (const std::wstring& name : names) {
-                MenuItem item;
-                item.kind = MenuItemKind::Handler;
-                // 加 "handler:" 前缀以与 verb 的 id 区分，避免重名。
-                item.id = "handler:" + wide_to_utf8(name);
-                item.enabled = true;              // handler 启停较复杂，先一律 true
-                item.canRename = false;
-                item.canChangeIcon = false;
-                item.canToggle = true;
-                item.regPath = "HKEY_CLASSES_ROOT\\" +
-                               wide_to_utf8(handlerRoot + L"\\" + name);
-
-                // 取 handler 子键自身的默认值，多半是个 CLSID。
-                std::wstring clsid;
-                std::wstring handlerPath = handlerRoot + L"\\" + name;
-                HKEY hHand = nullptr;
-                if (RegOpenKeyExW(HKEY_CLASSES_ROOT, handlerPath.c_str(), 0,
-                                  KEY_QUERY_VALUE, &hHand) == ERROR_SUCCESS) {
-                    reg_read_string(hHand, nullptr, &clsid);
-                    RegCloseKey(hHand);
-                }
-
-                // 候选 CLSID：键名或子键默认值（任一是 {...} 形式就拿去 HKCR\CLSID 查）。
-                std::wstring candidate = (name.size() >= 2 && name[0] == L'{') ? name
-                                       : (clsid.size() >= 2 && clsid[0] == L'{') ? clsid
-                                       : L"";
-
-                // SYS 标记改精准判定：看 InprocServer32 的 DLL 是否在 %SystemRoot% 下。
-                // 之前的「handler 一律 system=true」把 7-Zip、IDE shell 集成等第三方
-                // 全标成 SYS，让用户做无谓的二次确认。现在只有系统 DLL 才算 system，
-                // 找不到 DLL 路径的（信息不全）保守不算系统。
-                // SYS flag now follows the actual DLL location instead of being
-                // hardcoded true for every handler.
-                item.system = is_system_handler_by_clsid(candidate);
-
-                // 把 CLSID 带给前端：handler 的真实动态菜单（折叠子项/本地化文字）
-                // 注册表静态读不到，前端拿 CLSID 调 probe_handler_menu 走子进程实例化
-                // 探测。candidate 为空（无 CLSID）则留空，前端据此不探测。
-                item.clsid = wide_to_utf8(candidate);
-
-                std::wstring label;
-                if (!candidate.empty()) {
-                    std::wstring clsidKey = L"CLSID\\" + candidate;
-                    HKEY hClsid = nullptr;
-                    if (RegOpenKeyExW(HKEY_CLASSES_ROOT, clsidKey.c_str(), 0,
-                                      KEY_QUERY_VALUE, &hClsid) == ERROR_SUCCESS) {
-                        // 先试 LocalizedString（间接资源，最权威）。
-                        std::wstring loc;
-                        if (reg_read_string(hClsid, L"LocalizedString", &loc) && !loc.empty()) {
-                            std::wstring r = resolve_indirect_string(loc);
-                            if (!r.empty() && r[0] != L'@') label = r;
-                        }
-                        // 再试默认值（多为明文友好名）。
-                        if (label.empty()) {
-                            std::wstring def;
-                            if (reg_read_string(hClsid, nullptr, &def) && !def.empty()) {
-                                if (def[0] != L'@') label = def;
-                                else {
-                                    std::wstring r = resolve_indirect_string(def);
-                                    if (!r.empty() && r[0] != L'@') label = r;
-                                }
-                            }
-                        }
-                        RegCloseKey(hClsid);
-                    }
-                }
-                // 键名不是 CLSID 且可读，原样用。
-                if (label.empty() && (name.empty() || name[0] != L'{')) {
-                    label = name;
-                }
-                // 走 humanize 兜底（去前导 '.'、驼峰拆词）。
-                if (label.empty() || (label.size() >= 2 && label[0] == L'{')) {
-                    label = humanize_verb_name(name);
-                    // 若键名是纯 CLSID，humanize 后还是 {...}，最后兜底返回 "COM 扩展"。
-                    if (!label.empty() && label[0] == L'{') label = L"";
-                }
-                if (label.empty()) label = L"COM Extension";
-
-                item.label = wide_to_utf8(clean_label(label));
-                items.push_back(item);
+                items.push_back(read_handler(rootPath, name, enabled));
             }
-        }
+        };
+
+        scan_handler_root(handlerRoot, true);
+        if (dpos != std::wstring::npos) scan_handler_root(disHandlerRoot, false);
     }
 
     return items;
@@ -760,8 +804,15 @@ bool do_backup(MenuScene scene, std::string* outPathUtf8) {
                              CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
     if (!ok) return false;
 
-    // 最多等 5 秒，避免卡死。
-    WaitForSingleObject(pi.hProcess, 5000);
+    // 最多等 30 秒。* 场景（AllFiles）导出 HKCR\* 整树较慢，5 秒会未导完就超时
+    // → exitCode 拿到 259(STILL_ACTIVE) 被当失败误报 backup_failed 挡住写操作。
+    // 用 WAIT_TIMEOUT 判「还在跑」，只有真超 30 秒才放弃。
+    DWORD waitRc = WaitForSingleObject(pi.hProcess, 30000);
+    if (waitRc == WAIT_TIMEOUT) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        return false;
+    }
     DWORD exitCode = 1;
     GetExitCodeProcess(pi.hProcess, &exitCode);
     CloseHandle(pi.hThread);
@@ -784,39 +835,64 @@ std::wstring id_to_verb(const std::string& id, bool* isHandler) {
     return utf8_to_wide(id);
 }
 
-// 打开某 verb 子键（KEY_SET_VALUE 等可写权限），返回是否成功。
+// ============================================================
+//  写真实 hive（提权版）
 //
-// 写回走 HKCU\Software\Classes 覆盖层，而非 HKCR/HKLM：
-//   HKCR 是 HKLM\Software\Classes + HKCU\Software\Classes 的合并视图，系统项
-//   实际在 HKLM 下，写 HKLM 需要管理员权限（非提权进程会 ERROR_ACCESS_DENIED）。
-//   写 HKCU\Software\Classes 不需提权、只影响当前用户、随时可删恢复，且因合并视图
-//   规则「HKCU 优先于 HKLM」，写在这里能正确覆盖系统项的显示——完全符合本项目
-//   「只动 HKCU、纯本地、可逆」的哲学。
-//   该子键在 HKCU 侧可能尚不存在（只在 HKLM 有），故用 RegCreateKeyEx 按需创建。
-bool open_verb_key_for_write(MenuScene scene, const std::wstring& verb, HKEY* outKey) {
+//  经典菜单项分散在两处：HKLM\Software\Classes（装机级，所有用户，第三方软件
+//  多写这里）与 HKCU\Software\Classes（用户级）。工具以管理员身份运行（见
+//  app.manifest），可直接写真实位置。
+//
+//  旧版走「纯 HKCU 覆盖层」有个致命缺陷：像 123云盘 / ToDesk 这类第三方项，
+//  其 LegacyDisable 停用标记写在 HKLM，纯 HKCU 删不掉 → 合并视图仍禁用 →
+//  用户「怎么点都开不了」。提权后直接改真实 hive，才能真正启停 / 改名 / 换图标。
+// ============================================================
+
+// 打开某 hive（HKLM/HKCU）下的 verb 键。create=true 时按需创建。失败返回 false。
+bool open_verb_in_hive(HKEY hive, MenuScene scene, const std::wstring& verb,
+                       REGSAM access, bool create, HKEY* outKey) {
     std::wstring shellRoot = scene_shell_root(scene);
     if (shellRoot.empty()) return false;
-    // HKCU\Software\Classes\<场景shell根>\<verb>
+    // HKLM 用 "SOFTWARE\Classes"、HKCU 用 "Software\Classes"，大小写不敏感，统一写法。
     std::wstring subPath = L"Software\\Classes\\" + shellRoot + L"\\" + verb;
-    DWORD disp = 0;
-    return RegCreateKeyExW(HKEY_CURRENT_USER, subPath.c_str(), 0, nullptr,
-                           REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, nullptr,
-                           outKey, &disp) == ERROR_SUCCESS;
+    if (create) {
+        DWORD disp = 0;
+        return RegCreateKeyExW(hive, subPath.c_str(), 0, nullptr,
+                               REG_OPTION_NON_VOLATILE, access, nullptr,
+                               outKey, &disp) == ERROR_SUCCESS;
+    }
+    return RegOpenKeyExW(hive, subPath.c_str(), 0, access, outKey) == ERROR_SUCCESS;
 }
 
-// 打开某 verb 子键只读（用于读当前值）。优先读 HKCU 覆盖层（我们改过的），
-// 没有再退回 HKCR 合并视图。access 一般传 KEY_QUERY_VALUE。
+// verb 在各 hive 的存在情况（决定往哪写、删哪里）。
+struct VerbHives { bool hklm = false; bool hkcu = false; };
+VerbHives locate_verb(MenuScene scene, const std::wstring& verb) {
+    VerbHives v;
+    HKEY h = nullptr;
+    if (open_verb_in_hive(HKEY_LOCAL_MACHINE, scene, verb, KEY_QUERY_VALUE, false, &h)) {
+        v.hklm = true; RegCloseKey(h);
+    }
+    if (open_verb_in_hive(HKEY_CURRENT_USER, scene, verb, KEY_QUERY_VALUE, false, &h)) {
+        v.hkcu = true; RegCloseKey(h);
+    }
+    return v;
+}
+
+// 决定「写入主 hive」：verb 若在 HKLM 存在就写 HKLM（覆盖装机级，对所有用户生效，
+// 与项真实所在一致）；否则写 HKCU（纯用户项，或全新建项落用户级更安全）。
+HKEY primary_write_hive(MenuScene scene, const std::wstring& verb) {
+    VerbHives v = locate_verb(scene, verb);
+    return v.hklm ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER;
+}
+
+// 打开某 verb 子键只读（读当前值）。HKCU 覆盖优先，再 HKLM，最后 HKCR 合并视图兜底。
 bool open_verb_key(MenuScene scene, const std::wstring& verb, REGSAM access,
                    HKEY* outKey) {
+    if (open_verb_in_hive(HKEY_CURRENT_USER, scene, verb, access, false, outKey))
+        return true;
+    if (open_verb_in_hive(HKEY_LOCAL_MACHINE, scene, verb, access, false, outKey))
+        return true;
     std::wstring shellRoot = scene_shell_root(scene);
     if (shellRoot.empty()) return false;
-    // 先试 HKCU 覆盖层。
-    std::wstring hkcuPath = L"Software\\Classes\\" + shellRoot + L"\\" + verb;
-    if (RegOpenKeyExW(HKEY_CURRENT_USER, hkcuPath.c_str(), 0, access, outKey)
-        == ERROR_SUCCESS) {
-        return true;
-    }
-    // 退回 HKCR 合并视图（系统项原始位置）。
     std::wstring subPath = shellRoot + L"\\" + verb;
     return RegOpenKeyExW(HKEY_CLASSES_ROOT, subPath.c_str(), 0, access, outKey)
            == ERROR_SUCCESS;
@@ -841,16 +917,21 @@ std::wstring current_verb_label(MenuScene scene, const std::wstring& verb) {
     return label;
 }
 
-// 把某 verb 子键的默认值（REG_SZ）设为给定宽字符串。写 HKCU 覆盖层。
+// 把某 verb 子键的默认值（REG_SZ）设为给定宽字符串，写真实主 hive。
+// 关键：若该项原本有 MUIVerb，Windows 显示时 MUIVerb 优先于默认值 → 只改默认值
+// 改名不生效。故写默认值的同时删掉 MUIVerb（改名后以我们写的默认值为准）。
 bool set_verb_default(MenuScene scene, const std::wstring& verb,
                       const std::wstring& value) {
+    HKEY hive = primary_write_hive(scene, verb);
     HKEY hSub = nullptr;
-    if (!open_verb_key_for_write(scene, verb, &hSub)) return false;
+    if (!open_verb_in_hive(hive, scene, verb, KEY_SET_VALUE, true, &hSub)) return false;
     // cbData 含终止符。
     LSTATUS st = RegSetValueExW(
         hSub, nullptr, 0, REG_SZ,
         reinterpret_cast<const BYTE*>(value.c_str()),
         (DWORD)((value.size() + 1) * sizeof(wchar_t)));
+    // 删 MUIVerb（不存在也无所谓），让默认值成为唯一显示来源。
+    RegDeleteValueW(hSub, L"MUIVerb");
     RegCloseKey(hSub);
     return st == ERROR_SUCCESS;
 }
@@ -886,41 +967,200 @@ std::string rename_item(MenuScene scene, const std::string& id,
     return result_json(true, "ok");
 }
 
+// —— handler 启停（shellex\ContextMenuHandlers）——
+// COM 扩展 handler 的启停不是改值，而是把 handler 子键在两个位置间搬家：
+//   启用位置： shellex\ContextMenuHandlers\<name>
+//   停用位置： shellex\-ContextMenuHandlers\<name>   （前缀 '-'，shell 不枚举这里）
+// 这是 Windows 惯例的 disabled mirror（参考项目 ContextMenuMgr 亦同）。整键复制后
+// 删源，保留 CLSID 值不丢。搬 HKLM 需管理员（已提权）。找不到就退回 HKCU 侧尝试。
+// scene_handler_root 给的是启用根，把最后一段 "ContextMenuHandlers" 换成
+// "-ContextMenuHandlers" 即停用根。
+namespace {
+
+// 递归把 src 键树整体复制到 dst（含所有值与子键）。dst 按需创建。
+bool copy_key_tree(HKEY srcRoot, const std::wstring& srcPath,
+                   HKEY dstRoot, const std::wstring& dstPath) {
+    HKEY hSrc = nullptr;
+    if (RegOpenKeyExW(srcRoot, srcPath.c_str(), 0,
+                      KEY_READ, &hSrc) != ERROR_SUCCESS) return false;
+    HKEY hDst = nullptr;
+    DWORD disp = 0;
+    if (RegCreateKeyExW(dstRoot, dstPath.c_str(), 0, nullptr,
+                        REG_OPTION_NON_VOLATILE, KEY_WRITE, nullptr,
+                        &hDst, &disp) != ERROR_SUCCESS) {
+        RegCloseKey(hSrc);
+        return false;
+    }
+    // 复制值。
+    for (DWORD i = 0; ; ++i) {
+        wchar_t name[512]; DWORD cchName = ARRAYSIZE(name);
+        DWORD type = 0, cbData = 0;
+        LSTATUS st = RegEnumValueW(hSrc, i, name, &cchName, nullptr,
+                                   &type, nullptr, &cbData);
+        if (st == ERROR_NO_MORE_ITEMS) break;
+        if (st != ERROR_SUCCESS) break;
+        std::vector<BYTE> data(cbData ? cbData : 1);
+        cchName = ARRAYSIZE(name);
+        if (RegEnumValueW(hSrc, i, name, &cchName, nullptr, &type,
+                          data.data(), &cbData) == ERROR_SUCCESS) {
+            RegSetValueExW(hDst, name, 0, type, data.data(), cbData);
+        }
+    }
+    // 递归复制子键。
+    for (DWORD i = 0; ; ++i) {
+        wchar_t sub[512]; DWORD cch = ARRAYSIZE(sub);
+        LSTATUS st = RegEnumKeyExW(hSrc, i, sub, &cch, nullptr,
+                                   nullptr, nullptr, nullptr);
+        if (st == ERROR_NO_MORE_ITEMS) break;
+        if (st != ERROR_SUCCESS) break;
+        copy_key_tree(srcRoot, srcPath + L"\\" + sub,
+                      dstRoot, dstPath + L"\\" + sub);
+    }
+    RegCloseKey(hSrc);
+    RegCloseKey(hDst);
+    return true;
+}
+
+// 判某 hive 下 handler 是否已处于目标位置（enable→在启用根，disable→在停用根）。
+// 用于「已在目标态」幂等判定：move_handler 因源不存在返回 false 时，区分「本就到位」
+// 与「真找不到」，前者视为成功不报假失败。
+bool handler_at_target(HKEY hive, MenuScene scene, const std::wstring& rawName,
+                       bool enable) {
+    std::wstring enRoot = scene_handler_root(scene);
+    if (enRoot.empty()) return false;
+    std::wstring disRoot = enRoot;
+    size_t pos = disRoot.rfind(L"ContextMenuHandlers");
+    if (pos == std::wstring::npos) return false;
+    disRoot.insert(pos, L"-");
+    // 目标根：启用态在启用根，停用态在停用根。
+    std::wstring targetPath = L"Software\\Classes\\" +
+                              (enable ? enRoot : disRoot) + L"\\" + rawName;
+    HKEY h = nullptr;
+    if (RegOpenKeyExW(hive, targetPath.c_str(), 0, KEY_READ, &h) == ERROR_SUCCESS) {
+        RegCloseKey(h);
+        return true;
+    }
+    return false;
+}
+
+// 把 handler（原始子键名 rawName，可能带前导空格）在启用/停用位置间搬家。
+// 在某 hive 下：启用根 = scene_handler_root，停用根 = 同级 "-ContextMenuHandlers"。
+// 返回是否成功搬动（源不存在算失败，让调用方换 hive 再试）。
+bool move_handler(HKEY hive, MenuScene scene, const std::wstring& rawName, bool enable) {
+    std::wstring enRoot = scene_handler_root(scene);   // 如 *\shellex\ContextMenuHandlers
+    if (enRoot.empty()) return false;
+    // 推出停用根：把结尾 "ContextMenuHandlers" 换成 "-ContextMenuHandlers"。
+    std::wstring disRoot = enRoot;
+    size_t pos = disRoot.rfind(L"ContextMenuHandlers");
+    if (pos == std::wstring::npos) return false;
+    disRoot.insert(pos, L"-");
+
+    std::wstring base = L"Software\\Classes\\";
+    std::wstring srcRootPath = base + (enable ? disRoot : enRoot) + L"\\" + rawName;
+    std::wstring dstRootPath = base + (enable ? enRoot : disRoot) + L"\\" + rawName;
+
+    // 源必须存在。
+    HKEY hProbe = nullptr;
+    if (RegOpenKeyExW(hive, srcRootPath.c_str(), 0, KEY_READ, &hProbe) != ERROR_SUCCESS)
+        return false;
+    RegCloseKey(hProbe);
+
+    if (!copy_key_tree(hive, srcRootPath, hive, dstRootPath)) return false;
+    // 复制成功后删源整树。
+    RegDeleteTreeW(hive, srcRootPath.c_str());
+    return true;
+}
+
+}  // namespace
+
 std::string set_item_enabled(MenuScene scene, const std::string& id, bool enabled) {
     bool isHandler = false;
     std::wstring verb = id_to_verb(id, &isHandler);
     if (verb.empty()) return result_json(false, "not_found");
-
-    // handler 启停较复杂，本期不支持；按不可操作返回。
-    if (isHandler) return result_json(false, "cannot_toggle");
-
-    HKEY hSub = nullptr;
-    if (!open_verb_key(scene, verb, KEY_QUERY_VALUE, &hSub)) {
-        return result_json(false, "not_found");
-    }
-    RegCloseKey(hSub);
 
     std::string backupPath;
     if (!do_backup(scene, &backupPath)) {
         return result_json(false, "backup_failed");
     }
 
-    if (!open_verb_key_for_write(scene, verb, &hSub)) {
-        return result_json(false, "registry_failed");
+    // —— handler：在启用/停用两个 mirror 位置间搬家 ——
+    if (isHandler) {
+        // verb 变量此处实为 handler 原始子键名（含可能的前导空格，与 scan 时一致）。
+        // 关键：不能用 || 短路。同一 handler 可能 HKLM、HKCU 两处都注册，scan 走
+        // HKCR 合并视图只显示一个。若停用只搬了 HKLM，HKCU 那份仍在启用根 → 合并
+        // 视图仍启用（看着「停用没生效」）。故两个 hive 都尝试搬，任一成功即成功。
+        bool movedHklm = move_handler(HKEY_LOCAL_MACHINE, scene, verb, enabled);
+        bool movedHkcu = move_handler(HKEY_CURRENT_USER, scene, verb, enabled);
+        if (!movedHklm && !movedHkcu) {
+            // 没搬动任何一份：可能是「已在目标态」（重复点同方向 / 前端竞态），
+            // 也可能是「真找不到」。已在目标态视为幂等成功，不报假失败。
+            if (handler_at_target(HKEY_LOCAL_MACHINE, scene, verb, enabled) ||
+                handler_at_target(HKEY_CURRENT_USER, scene, verb, enabled)) {
+                return result_json(true, "ok");
+            }
+            return result_json(false, "registry_failed");
+        }
+        return result_json(true, "ok");
     }
-    LSTATUS st;
+
+    // —— verb：删/加 LegacyDisable。关键修复「怎么点都开不了」——
+    // 停用标记可能写在 HKLM（第三方装机项，如 123云盘/ToDesk）也可能 HKCU。
+    // 启用时必须把两个 hive 的 LegacyDisable 都删掉，否则合并视图里只要有一处
+    // 停用标记项就仍然禁用。提权后 HKLM 可写。
+    VerbHives loc = locate_verb(scene, verb);
+    if (!loc.hklm && !loc.hkcu) {
+        // HKCR 合并视图能看到但两 hive 都定位不到（罕见），按未找到。
+        HKEY hCheck = nullptr;
+        if (!open_verb_key(scene, verb, KEY_QUERY_VALUE, &hCheck))
+            return result_json(false, "not_found");
+        RegCloseKey(hCheck);
+    }
+
+    bool anyOk = false;
     if (enabled) {
-        // 启用：删掉 LegacyDisable 值（不存在也算成功）。
-        st = RegDeleteValueW(hSub, L"LegacyDisable");
-        if (st == ERROR_FILE_NOT_FOUND) st = ERROR_SUCCESS;
+        // 启用：两个 hive 都删 LegacyDisable（存在才删）。
+        for (HKEY hive : { HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER }) {
+            HKEY hSub = nullptr;
+            if (open_verb_in_hive(hive, scene, verb, KEY_SET_VALUE, false, &hSub)) {
+                LSTATUS st = RegDeleteValueW(hSub, L"LegacyDisable");
+                RegCloseKey(hSub);
+                if (st == ERROR_SUCCESS || st == ERROR_FILE_NOT_FOUND) anyOk = true;
+            }
+        }
     } else {
-        // 停用：写一个空的 LegacyDisable（REG_SZ 空串）。
-        const wchar_t empty[] = L"";
-        st = RegSetValueExW(hSub, L"LegacyDisable", 0, REG_SZ,
-                            reinterpret_cast<const BYTE*>(empty), sizeof(wchar_t));
+        // 停用：项在哪个 hive 存在就往哪个 hive 写 LegacyDisable。
+        // 只写主 hive 不够——若 HKCU 覆盖层也有同名 verb 且无停用标记，合并视图
+        // HKCU 优先，仍显示启用（看着「停用没生效」）。与启用分支「两 hive 都删」
+        // 对称：两 hive 都写，谁在合并视图优先都被停用。至少一处存在才算成功。
+        for (HKEY hive : { HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER }) {
+            HKEY hSub = nullptr;
+            // 只对「该 hive 里真实存在的 verb」写，不用 create——避免在没有该 verb
+            // 的 hive 凭空建空壳键。
+            if (open_verb_in_hive(hive, scene, verb, KEY_SET_VALUE, false, &hSub)) {
+                const wchar_t empty[] = L"";
+                LSTATUS st = RegSetValueExW(hSub, L"LegacyDisable", 0, REG_SZ,
+                                            reinterpret_cast<const BYTE*>(empty),
+                                            sizeof(wchar_t));
+                RegCloseKey(hSub);
+                if (st == ERROR_SUCCESS) anyOk = true;
+            }
+        }
+        // 两 hive 都不存在该 verb（仅 HKCR 合并视图可见的罕见情形）：退回主 hive
+        // 建键写标记，保证停用有落点。
+        if (!anyOk) {
+            HKEY hive = primary_write_hive(scene, verb);
+            HKEY hSub = nullptr;
+            if (open_verb_in_hive(hive, scene, verb, KEY_SET_VALUE, true, &hSub)) {
+                const wchar_t empty[] = L"";
+                LSTATUS st = RegSetValueExW(hSub, L"LegacyDisable", 0, REG_SZ,
+                                            reinterpret_cast<const BYTE*>(empty),
+                                            sizeof(wchar_t));
+                RegCloseKey(hSub);
+                anyOk = (st == ERROR_SUCCESS);
+            }
+        }
     }
-    RegCloseKey(hSub);
-    if (st != ERROR_SUCCESS) return result_json(false, "registry_failed");
+    if (!anyOk) return result_json(false, "registry_failed");
     return result_json(true, "ok");
 }
 
@@ -930,18 +1170,21 @@ std::string set_item_icon(MenuScene scene, const std::string& id,
     std::wstring verb = id_to_verb(id, &isHandler);
     if (isHandler || verb.empty()) return result_json(false, "not_found");
 
-    HKEY hSub = nullptr;
-    if (!open_verb_key(scene, verb, KEY_QUERY_VALUE, &hSub)) {
+    HKEY hCheck = nullptr;
+    if (!open_verb_key(scene, verb, KEY_QUERY_VALUE, &hCheck)) {
         return result_json(false, "not_found");
     }
-    RegCloseKey(hSub);
+    RegCloseKey(hCheck);
 
     std::string backupPath;
     if (!do_backup(scene, &backupPath)) {
         return result_json(false, "backup_failed");
     }
 
-    if (!open_verb_key_for_write(scene, verb, &hSub)) {
+    // 写真实主 hive（项在 HKLM 就写 HKLM，否则 HKCU），已提权可写。
+    HKEY hive = primary_write_hive(scene, verb);
+    HKEY hSub = nullptr;
+    if (!open_verb_in_hive(hive, scene, verb, KEY_SET_VALUE, true, &hSub)) {
         return result_json(false, "registry_failed");
     }
     std::wstring icon = utf8_to_wide(iconSource);

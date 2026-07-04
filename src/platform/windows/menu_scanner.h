@@ -32,6 +32,9 @@ enum class MenuScene {
     DirectoryBackground, // 文件夹/资源管理器空白处
     Drive,               // 驱动器（此电脑里的盘符）
     RecycleBin,          // 回收站
+    AllFileSystemObjects,// 所有文件系统对象（文件+文件夹合集）
+    Computer,            // 此电脑
+    Library,             // 库文件夹
 };
 
 // 菜单项来源类型。

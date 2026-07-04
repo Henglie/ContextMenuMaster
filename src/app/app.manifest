@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- ============================================================
+     鼠标右键主理人 ContextMenuMaster —— 应用清单
+     requireAdministrator：启动即请求 UAC 提权。
+     经典右键菜单项分散在 HKLM\SOFTWARE\Classes（所有用户）与 HKCU
+     两处；第三方项（123pan/ToDesk/迅雷 等）的 LegacyDisable 常写在
+     HKLM，纯用户态删不掉 → 开关失灵。提权后可直接写真实位置，
+     支持所有项的启停/改名/换图标，与同类工具对齐。
+     ============================================================ -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity
+      type="win32"
+      name="Henglie.ContextMenuMaster"
+      version="0.1.0.0"
+      processorArchitecture="*"/>
+
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <!-- requireAdministrator：始终以管理员身份运行（会弹 UAC）。 -->
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <!-- 声明兼容 Win10/11，让 GetVersion 等 API 返回真实版本。 -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/> <!-- Win10/11 -->
+    </application>
+  </compatibility>
+
+  <!-- 高 DPI 感知 + UTF-8 活动代码页（中文路径/文案更稳）。 -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+    </windowsSettings>
+  </application>
+</assembly>
