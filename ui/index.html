@@ -917,6 +917,9 @@
             <button :class="{on: view==='list'}" @click="view='list'">{{ t('editor.view_list') }}</button>
           </div>
           <div class="spacer"></div>
+          <button class="btn sm primary" @click="customAdd" :disabled="busy">
+            <span class="ic">＋</span>{{ t('custom.add') }}
+          </button>
           <button class="btn sm" @click="reloadScene" :disabled="busy">
             <span class="ic">↻</span>{{ t('editor.refresh') }}
           </button>
@@ -1142,8 +1145,15 @@
                       @click="it.canToggle && askToggle(it)"><span class="knob"></span></span>
               </span>
               <span class="actions">
-                <button :disabled="!it.canRename" @click="startRename(it)" :title="t('list.rename')"><span class="ic">✎</span>{{ t('list.rename') }}</button>
-                <button :disabled="!it.canChangeIcon" @click="openGlyphPickFromList(it, $event)" :title="t('list.icon_btn')"><span class="ic">◆</span>{{ t('list.icon_btn') }}</button>
+                <!-- 自建项（custom）：编辑 / 删除；扫描项：改名 / 换图标 -->
+                <template v-if="it.custom">
+                  <button @click="customEditOpen(it)" :title="t('custom.edit')"><span class="ic">✎</span>{{ t('custom.edit') }}</button>
+                  <button @click="customDel(it)" :title="t('custom.del')"><span class="ic">⌫</span>{{ t('custom.del') }}</button>
+                </template>
+                <template v-else>
+                  <button :disabled="!it.canRename" @click="startRename(it)" :title="t('list.rename')"><span class="ic">✎</span>{{ t('list.rename') }}</button>
+                  <button :disabled="!it.canChangeIcon" @click="openGlyphPickFromList(it, $event)" :title="t('list.icon_btn')"><span class="ic">◆</span>{{ t('list.icon_btn') }}</button>
+                </template>
               </span>
             </div>
           </div>
@@ -1181,6 +1191,46 @@
             </button>
           </div>
           <div class="card-desc" style="margin:14px 0 0; color:var(--warn);">{{ t('win11.warn') }}</div>
+        </div>
+
+        <!-- 现代菜单可视化预览：仿真 Win11 右键现代菜单外观，渲染已启用的 PackagedCom 扩展项。
+             只读示意（现代菜单由系统管理，启停在下方列表操作），让用户直观看到菜单长相。 -->
+        <div class="cat-title">{{ t('win11.preview_section') }}</div>
+        <div class="card glass" style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+          <div class="card-desc" style="margin:0; align-self:flex-start;">{{ t('win11.preview_hint') }}</div>
+          <div class="ctx-menu" style="margin:6px 0;">
+            <div class="ctx-toolbar">
+              <div class="ctx-tool" :title="t('win11.tool_cut')"><span class="gi">✂</span></div>
+              <div class="ctx-tool" :title="t('win11.tool_copy')"><span class="gi">⧉</span></div>
+              <div class="ctx-tool" :title="t('win11.tool_rename')"><span class="gi">✎</span></div>
+              <div class="ctx-tool" :title="t('win11.tool_share')"><span class="gi">↗</span></div>
+              <div class="ctx-tool" :title="t('win11.tool_delete')"><span class="gi">✕</span></div>
+            </div>
+            <div class="ctx-sep"></div>
+            <div class="ctx-row">
+              <span class="glyph"><span>▶</span></span>
+              <span class="label">{{ t('win11.demo_open') }}</span>
+              <span class="right"></span>
+            </div>
+            <template v-if="win11PreviewItems.filter(x=>x.enabled).length">
+              <div class="ctx-sep"></div>
+              <div v-for="it in win11PreviewItems.filter(x=>x.enabled)" :key="it.id" class="ctx-row">
+                <span class="glyph">
+                  <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
+                  <span v-else>◆</span>
+                </span>
+                <span class="label">{{ it.label }}</span>
+                <span class="right"></span>
+              </div>
+            </template>
+            <div class="ctx-sep"></div>
+            <div class="ctx-row ctx-more-row">
+              <span class="glyph">⋯</span>
+              <span class="label ctx-more">{{ t('win11.show_more') }}</span>
+              <span class="right"><span class="chev">▸</span></span>
+            </div>
+          </div>
+          <div v-if="!win11PreviewItems.filter(x=>x.enabled).length" class="card-desc" style="margin:0;">{{ t('win11.preview_empty') }}</div>
         </div>
 
         <div class="cat-title">{{ t('win11.sparse_section') }}</div>
@@ -1475,6 +1525,21 @@ const i18n = {
       empty_packaged:'未发现第三方现代菜单扩展', empty_system:'无可展示的系统命令',
       list_warn:'启停通过写入 Shell Extensions 黑名单实现，改动后需重启资源管理器（explorer.exe）生效。系统内置命令只读，误封锁可能导致现代菜单整体回退到经典菜单。',
       applied:'已切换，正在重启资源管理器使其生效…',
+      preview_section:'菜单预览', preview_hint:'下面是启用的现代菜单扩展在 Win11 右键菜单里的大致样子（只读示意，启停在下方列表操作）。',
+      preview_empty:'当前没有启用的第三方现代菜单项。', demo_open:'打开',
+    },
+    custom:{
+      add:'新建菜单项', edit:'编辑', del:'删除',
+      add_title:'新建自定义右键项', edit_title:'编辑自定义右键项',
+      f_label:'显示名称', f_label_ph:'右键菜单里显示的文字',
+      f_kind:'执行类型',
+      kind_program:'运行程序（选中项作参数）', kind_folder:'打开文件夹', kind_url:'打开网址', kind_command:'自定义命令行（高级）',
+      f_target:'目标', f_target_ph:'程序/文件夹的完整路径，如 C:\\\\Windows\\\\System32\\\\notepad.exe',
+      f_target_url_ph:'网址，如 https://example.com',
+      f_icon:'图标（可选）', f_icon_ph:'图标路径，如 exe 路径 或 C:\\\\x.ico，留空则无图标',
+      f_position:'位置', pos_default:'默认', pos_top:'置于菜单顶部', pos_bottom:'置于菜单底部',
+      save:'保存', need_label:'请填写显示名称', need_target:'请填写目标',
+      del_title:'删除自定义项', del_desc:'确定删除「{name}」？此项由本工具创建，将直接从注册表移除。',
     },
     about:{
       body:'在 Windows 11 上重新主理你的鼠标右键菜单。可视化编辑、批量管理、一键找回经典菜单。<br>纯本地运行，只改当前用户注册表，随时可逆。',
@@ -1617,6 +1682,21 @@ const i18n = {
       empty_packaged:'未偵測到第三方 Win11 選單擴充', empty_system:'無系統現代選單項',
       list_warn:'啟停後需重啟資源管理器（或登出重登）方能生效。系統命令唯讀：誤封鎖可能導致整個現代選單回退為經典選單。',
       applied:'已切換，正在重啟資源管理器使其生效…',
+      preview_section:'現代選單預覽', preview_hint:'下方是啟用中的擴充項在 Win11 現代右鍵選單裡的大致長相（唯讀示意，啟停請在下方清單操作）。',
+      preview_empty:'目前沒有啟用的第三方擴充項，現代選單只有系統內建項。', demo_open:'開啟',
+    },
+    custom:{
+      add:'新增選單項', edit:'編輯', del:'刪除',
+      add_title:'新增自訂右鍵項', edit_title:'編輯自訂右鍵項',
+      f_label:'顯示名稱', f_label_ph:'右鍵選單裡顯示的文字',
+      f_kind:'執行類型',
+      kind_program:'執行程式（選取項作參數）', kind_folder:'開啟資料夾', kind_url:'開啟網址', kind_command:'自訂命令列（進階）',
+      f_target:'目標', f_target_ph:'程式/資料夾的完整路徑，如 C:\\\\Windows\\\\System32\\\\notepad.exe',
+      f_target_url_ph:'網址，如 https://example.com',
+      f_icon:'圖示（可選）', f_icon_ph:'圖示路徑，如 exe 路徑 或 C:\\\\x.ico，留空則無圖示',
+      f_position:'位置', pos_default:'預設', pos_top:'置於選單頂部', pos_bottom:'置於選單底部',
+      save:'儲存', need_label:'請填寫顯示名稱', need_target:'請填寫目標',
+      del_title:'刪除自訂項', del_desc:'確定刪除「{name}」？此項由本工具建立，將直接從登錄檔移除。',
     },
     about:{
       body:'在 Windows 11 上重新主理你的滑鼠右鍵選單。視覺化編輯、批次管理、一鍵找回經典選單。<br>純本機執行，只改目前使用者登錄檔，隨時可逆。',
@@ -1762,6 +1842,22 @@ const i18n = {
       empty_packaged:'No third-party Win11 menu extensions detected', empty_system:'No system modern-menu items',
       list_warn:'Toggling takes effect after restarting Explorer (or signing out and back in). System commands are read-only: blocking the wrong one may make the entire modern menu fall back to the classic menu.',
       applied:'Toggled. Restarting Explorer to apply…',
+      preview_section:'Modern menu preview', preview_hint:'A mockup of the Win11 right-click modern menu. Shows enabled third-party extensions (read-only — toggle them in the list below).',
+      preview_empty:'No enabled third-party extensions yet — the preview shows only the system built-in items.', demo_open:'Open',
+    },
+    custom:{
+      add:'New item', edit:'Edit', del:'Delete',
+      add_title:'New custom menu item', edit_title:'Edit custom menu item',
+      f_label:'Display name', f_label_ph:'Name shown in the menu',
+      f_kind:'Action type',
+      kind_program:'Program', kind_folder:'Open folder', kind_url:'Open URL', kind_command:'Custom command',
+      f_target:'Target',
+      f_target_ph:'Program / folder path, or command line',
+      f_target_url_ph:'e.g. https://example.com',
+      f_icon:'Icon (optional)', f_icon_ph:'e.g. C:\\\\Windows\\\\System32\\\\notepad.exe or icon.ico',
+      f_position:'Position', pos_default:'Default', pos_top:'Top', pos_bottom:'Bottom',
+      save:'Save', need_label:'Please enter a display name', need_target:'Please enter a target',
+      del_title:'Delete custom item', del_desc:'Delete “{name}”? This custom menu item will be removed from the registry (reversible by re-creating it).',
     },
     about:{
       body:'Take charge of your right-click menu on Windows 11. Visual editing, batch management, one-click classic-menu restore.<br>Runs fully local, touches only the current-user registry, fully reversible.',
@@ -1955,6 +2051,10 @@ const app = createApp({
       magicSuffix: '',
       magicPresets: [' 喵~', ' ★', ' (新)'],
 
+      // 自建菜单项编辑器（差异化核心）。cx.show 控制弹层；editId 空=新建、非空=编辑既有项。
+      // kind: program/folder/url/command。三语文案与执行模板见后端 custom_menu。
+      cx: { show:false, editId:null, label:'', kind:'program', target:'', icon:'', position:'' },
+
       menuStatus: { classic: false },
 
       // Win11 现代菜单项（PackagedCom 可启停 + 系统白名单只读）。
@@ -1995,6 +2095,15 @@ const app = createApp({
         (it.source === 'system' ? system : packaged).push(it);
       }
       return { packaged, system };
+    },
+    // Win11 可视化预览用：模拟真实现代菜单外观。系统固定项（复制/粘贴等工具条）
+    // 与共享按钮由 shell 内建，这里只把用户可控的 packaged 项按启停呈现——启用项
+    // 正常显示，停用项灰显划掉，直观反映「封锁了哪些、菜单里少了哪些」。
+    win11PreviewItems() {
+      return this.win11Grouped.packaged.map(it => ({
+        id: it.id, label: it.label, icon: it.icon,
+        enabled: it.enabled, contextTypes: it.contextTypes,
+      }));
     },
 
     // Win+X 新增项可选目标组：现有分组并 Group1~3（去重，Group3 在前与菜单一致）。
@@ -2802,6 +2911,87 @@ const app = createApp({
       } else {
         await apply();
       }
+    },
+
+    // —— 自建菜单项编辑器 —— 差异化核心：在当前场景写自己的 shell\verb\command。
+    // 打开新建弹层（空表单）。
+    customAdd() {
+      this.customEdit = {
+        show: true, mode: 'add', id: null,
+        label: '', kind: 'program', target: '', icon: '', position: '',
+      };
+    },
+    // 打开编辑弹层，回填一个已有自建项。仅 custom=true 项可编辑。
+    customEditOpen(it) {
+      if (!it.custom) return;
+      // 从 command 反推 kind/target 较脆弱，这里只回填名称/图标；执行部分让用户重填
+      // （command 模板有引号/占位符，反解析易错，宁可让用户重选类型+目标，稳）。
+      this.customEdit = {
+        show: true, mode: 'edit', id: it.id,
+        label: it.label || '', kind: this.guessKind(it.command), target: this.guessTarget(it.command),
+        icon: it.iconSource || '', position: '',
+      };
+    },
+    // 从 command 粗略猜执行类型（仅用于编辑回填，用户可改）。
+    guessKind(cmd) {
+      const c = (cmd || '').toLowerCase();
+      if (c.startsWith('explorer.exe ')) return 'folder';
+      if (c.startsWith('cmd /c start ')) return 'url';
+      if (/^"?[a-z]:\\.*\.exe/i.test(cmd || '')) return 'program';
+      return 'command';
+    },
+    // 从 command 粗略抽目标路径（取第一个引号包裹段，或整串）。
+    guessTarget(cmd) {
+      if (!cmd) return '';
+      // folder: explorer.exe "X" → X ; url: cmd /c start "" "X" → X
+      const quoted = cmd.match(/"([^"]+)"/g);
+      if (quoted && quoted.length) {
+        // url 的第一个引号是空标题，取最后一个非空
+        for (let i = quoted.length - 1; i >= 0; i--) {
+          const s = quoted[i].replace(/"/g, '');
+          if (s && s !== '%1' && s !== '%V') return s;
+        }
+      }
+      return cmd;
+    },
+    customCancel() { this.customEdit.show = false; },
+    // 选一个程序/文件当目标（走系统文件选择由后端做；此处简化为手填，未来可加 bind）。
+    async customCommit() {
+      const e = this.customEdit;
+      const label = (e.label || '').trim();
+      const target = (e.target || '').trim();
+      if (!label) { this.showToast(this.t('custom.need_label'), 'err'); return; }
+      if (!target) { this.showToast(this.t('custom.need_target'), 'err'); return; }
+      let r;
+      if (e.mode === 'add') {
+        r = await this.callBackend('add_custom_item', this.scene, label, e.kind, target, e.icon || '', e.position || '');
+      } else {
+        r = await this.callBackend('edit_custom_item', this.scene, e.id, label, e.kind, target, e.icon || '', e.position || '');
+      }
+      if (r && r.ok) {
+        this.customEdit.show = false;
+        this.showToast(this.t('toast.ok'), 'ok');
+        await this.reloadScene();
+      } else {
+        this.showToast(this.t('toast.'+ (r?.key || 'registry_failed')), 'err');
+      }
+    },
+    // 删除一个自建项（仅 custom=true）。二次确认。
+    customDel(it) {
+      if (!it.custom) return;
+      this.askConfirm(
+        this.t('custom.del_title'),
+        this.t('custom.del_desc', { name: this.escapeHtml(it.label || it.id) }),
+        async () => {
+          const r = await this.callBackend('del_custom_item', this.scene, it.id);
+          if (r && r.ok) {
+            this.showToast(this.t('toast.ok'), 'ok');
+            await this.reloadScene();
+          } else {
+            this.showToast(this.t('toast.'+ (r?.key || 'registry_failed')), 'err');
+          }
+        }
+      );
     },
 
     // —— 启停流程 —— 系统项要二次确认。Toggle: confirm for system items.

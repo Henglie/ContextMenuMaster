@@ -29,6 +29,7 @@
 #include "platform/windows/shellnew_menu.h"
 #include "platform/windows/openwith_menu.h"
 #include "platform/windows/win11menu.h"
+#include "platform/windows/custom_menu.h"
 #include <vector>
 
 #pragma comment(lib, "comctl32.lib")
@@ -620,6 +621,57 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         bool ok = cmm::restart_explorer();
         return ok ? "{\"ok\":true}" : "{\"ok\":false,\"key\":\"restart_failed\"}";
     });
+
+    // —— 自建菜单项 CRUD —— 差异化核心：用户在任意场景写自己的 shell\verb\command。
+    //  参数顺序对齐后端签名。scene 首参用 scene_from_id 解析；写操作走异步 3 参 bind。
+    //  add:  [scene, label, kind, target, iconSource, position]
+    //  edit: [scene, id, label, kind, target, iconSource, position]
+    //  del:  [scene, id]
+    w.bind("add_custom_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string sid    = parse_string_arg_at(req, 0);
+            std::string label  = parse_string_arg_at(req, 1);
+            std::string kind   = parse_string_arg_at(req, 2);
+            std::string target = parse_string_arg_at(req, 3);
+            std::string icon   = parse_string_arg_at(req, 4);
+            std::string pos    = parse_string_arg_at(req, 5);
+            std::thread([&w, seq, sid, label, kind, target, icon, pos]() {
+                cmm::MenuScene scene;
+                if (!cmm::scene_from_id(sid, &scene)) {
+                    w.resolve(seq, 0, "{\"ok\":false,\"key\":\"bad_scene\"}"); return;
+                }
+                w.resolve(seq, 0, cmm::add_custom_item(scene, label, kind, target, icon, pos));
+            }).detach();
+        }, nullptr);
+    w.bind("edit_custom_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string sid    = parse_string_arg_at(req, 0);
+            std::string id     = parse_string_arg_at(req, 1);
+            std::string label  = parse_string_arg_at(req, 2);
+            std::string kind   = parse_string_arg_at(req, 3);
+            std::string target = parse_string_arg_at(req, 4);
+            std::string icon   = parse_string_arg_at(req, 5);
+            std::string pos    = parse_string_arg_at(req, 6);
+            std::thread([&w, seq, sid, id, label, kind, target, icon, pos]() {
+                cmm::MenuScene scene;
+                if (!cmm::scene_from_id(sid, &scene)) {
+                    w.resolve(seq, 0, "{\"ok\":false,\"key\":\"bad_scene\"}"); return;
+                }
+                w.resolve(seq, 0, cmm::edit_custom_item(scene, id, label, kind, target, icon, pos));
+            }).detach();
+        }, nullptr);
+    w.bind("del_custom_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string sid = parse_string_arg_at(req, 0);
+            std::string id  = parse_string_arg_at(req, 1);
+            std::thread([&w, seq, sid, id]() {
+                cmm::MenuScene scene;
+                if (!cmm::scene_from_id(sid, &scene)) {
+                    w.resolve(seq, 0, "{\"ok\":false,\"key\":\"bad_scene\"}"); return;
+                }
+                w.resolve(seq, 0, cmm::del_custom_item(scene, id));
+            }).detach();
+        }, nullptr);
 
     // —— 绑定：用默认浏览器打开外链 —— 参数 ["https://..."]
     // 只放行 https:// 开头的网址（白名单 schema），杜绝 file:// / 任意命令注入。

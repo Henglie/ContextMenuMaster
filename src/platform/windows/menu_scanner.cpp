@@ -443,6 +443,9 @@ MenuItem read_verb_generic(HKEY hRoot, const std::wstring& verbKeyPath,
     item.canChangeIcon = false;
     item.canToggle = false;
     item.system = is_system_verb(to_lower(verbName));
+    // 本工具自建项：verb 键名以 "cmm_" 开头。前端据此给「编辑/删除自建项」入口，
+    // 与第三方/系统 verb 区分（自建项可编辑执行命令，第三方项只能改名/图标/启停）。
+    item.custom = verbName.rfind(L"cmm_", 0) == 0;
     item.regPath = wide_to_utf8(std::wstring(hroot_name(hRoot)) + L"\\" + verbKeyPath);
 
     HKEY hSub = nullptr;
@@ -713,6 +716,7 @@ void item_to_json(const MenuItem& it, std::string& out) {
     out += ",\"canRename\":";   out += it.canRename ? "true" : "false";
     out += ",\"canChangeIcon\":";out += it.canChangeIcon ? "true" : "false";
     out += ",\"canToggle\":";   out += it.canToggle ? "true" : "false";
+    out += ",\"custom\":";      out += it.custom ? "true" : "false";
     out += ",\"clsid\":\"";     out += json_escape(it.clsid);      out += "\"";
     out += ",\"hasSubmenu\":";  out += it.hasSubmenu ? "true" : "false";
     out += ",\"children\":[";

@@ -64,6 +64,7 @@ add_library(cmm_core STATIC
     src/platform/windows/shellnew_menu.cpp
     src/platform/windows/openwith_menu.cpp
     src/platform/windows/win11menu.cpp
+    src/platform/windows/custom_menu.cpp
 )
 
 target_include_directories(cmm_core PUBLIC

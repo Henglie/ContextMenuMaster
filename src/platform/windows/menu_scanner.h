@@ -57,6 +57,7 @@ struct MenuItem {
     bool canRename = false;  // 是否支持改名（Verb 且非保护项才 true）
     bool canChangeIcon = false; // 是否支持换图标
     bool canToggle = true;   // 是否支持启用/停用
+    bool custom = false;     // 是否本工具自建项（verb 键名带 "cmm_" 前缀）——前端据此给「编辑/删除」入口
 
     // 级联子菜单（折叠菜单）。某些软件（如夸克AI）把一组子项折叠进一个父项：
     //   静态法：父 verb 带 SubCommands 值（分号/空格分隔，token 指向 CommandStore），

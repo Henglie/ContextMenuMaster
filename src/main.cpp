@@ -26,6 +26,7 @@
 #include "platform/windows/shellnew_menu.h"
 #include "platform/windows/openwith_menu.h"
 #include "platform/windows/win11menu.h"
+#include "platform/windows/custom_menu.h"
 
 #include <windows.h>
 #include <cstdio>
@@ -499,6 +500,51 @@ int main(int argc, char** argv) {
             return 0;
         }
         std::printf("unknown win11 subcommand: %s\n", argv[2]);
+        return 1;
+    }
+
+    //   CmmCli custom add <scene> <label> <kind> <target> [icon] [top|bottom]
+    //   CmmCli custom del <scene> <id>
+    //   kind = program|folder|url|command
+    if (std::strcmp(cmd, "custom") == 0) {
+        if (argc < 3) {
+            std::puts("usage: CmmCli custom <add|del>");
+            return 1;
+        }
+        cmm::MenuScene scene;
+        if (std::strcmp(argv[2], "add") == 0) {
+            if (argc < 7) {
+                std::puts("usage: CmmCli custom add <scene> <label> <kind> <target> [icon] [top|bottom]");
+                return 1;
+            }
+            if (!cmm::scene_from_id(argv[3], &scene)) {
+                std::printf("unknown scene: %s\n", argv[3]);
+                return 1;
+            }
+            std::string icon = (argc >= 8) ? argv[7] : "";
+            std::string pos  = (argc >= 9) ? argv[8] : "";
+            std::string json = cmm::add_custom_item(scene, argv[4], argv[5], argv[6], icon, pos);
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        if (std::strcmp(argv[2], "del") == 0) {
+            if (argc < 5) {
+                std::puts("usage: CmmCli custom del <scene> <id>");
+                return 1;
+            }
+            if (!cmm::scene_from_id(argv[3], &scene)) {
+                std::printf("unknown scene: %s\n", argv[3]);
+                return 1;
+            }
+            std::string json = cmm::del_custom_item(scene, argv[4]);
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        std::printf("unknown custom subcommand: %s\n", argv[2]);
         return 1;
     }
 
