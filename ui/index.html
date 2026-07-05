@@ -1178,11 +1178,61 @@
         </div>
 
         <div class="cat-title">{{ t('win11.sparse_section') }}</div>
-        <div class="card glass">
-          <div class="card-title">{{ t('win11.sparse_title') }}</div>
-          <div class="card-desc">{{ t('win11.sparse_desc') }}</div>
-          <span class="badge modern"><span class="dot"></span>{{ t('win11.coming_soon') }}</span>
+
+        <div class="toolbar">
+          <div class="card-desc" style="margin:0; flex:1;">{{ t('win11.list_desc') }}</div>
+          <button class="btn sm" @click="loadWin11(true)" :disabled="win11Loading">
+            <span class="ic">↻</span>{{ t('win11.refresh') }}
+          </button>
         </div>
+
+        <div v-if="win11Loading" class="loading"><span class="spinner"></span>{{ t('winx.loading') }}</div>
+
+        <template v-else>
+          <!-- PackagedCom：第三方 Win11 扩展，可启停（黑名单双写）——
+               PackagedCom third-party extensions, toggleable via blocked list. -->
+          <div class="card-title" style="margin:16px 0 8px;">{{ t('win11.grp_packaged') }}
+            <span class="sp-count">{{ win11Grouped.packaged.length }}</span></div>
+          <div v-if="!win11Grouped.packaged.length" class="empty">{{ t('win11.empty_packaged') }}</div>
+          <div v-else class="sp-list">
+            <div v-for="it in win11Grouped.packaged" :key="it.id"
+                 class="sp-item" :class="{disabled: !it.enabled}">
+              <span class="wi-glyph">
+                <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
+                <span v-else>◆</span>
+              </span>
+              <span class="wi-meta">
+                <span class="wi-name">{{ it.label }}</span>
+                <span class="wi-target" :title="it.contextTypes || it.package">{{ it.contextTypes || it.package }}</span>
+              </span>
+              <span class="wi-switch">
+                <span class="switch" :class="{on: it.enabled}"
+                      @click="win11Toggle(it)"><span class="knob"></span></span>
+              </span>
+            </div>
+          </div>
+
+          <!-- SystemCommandStore：系统内置命令，只读（误封锁会致现代菜单回退经典）——
+               System built-in commands, read-only for safety. -->
+          <div class="card-title" style="margin:20px 0 8px;">{{ t('win11.grp_system') }}
+            <span class="sp-count">{{ win11Grouped.system.length }}</span></div>
+          <div v-if="!win11Grouped.system.length" class="empty">{{ t('win11.empty_system') }}</div>
+          <div v-else class="sp-list">
+            <div v-for="it in win11Grouped.system" :key="it.id" class="sp-item">
+              <span class="wi-glyph">
+                <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
+                <span v-else>▤</span>
+              </span>
+              <span class="wi-meta">
+                <span class="wi-name">{{ it.label }}<span class="sp-sys">{{ t('sp.sys') }}</span></span>
+                <span class="wi-target" :title="it.commandKey">{{ it.commandKey }}</span>
+              </span>
+              <span class="sp-readonly">{{ t('sp.readonly') }}</span>
+            </div>
+          </div>
+
+          <div class="card-desc" style="margin:16px 0 0; color:var(--warn);">{{ t('win11.list_warn') }}</div>
+        </template>
       </div>
 
       <!-- ============ 关于 / About ============ -->
@@ -1413,6 +1463,10 @@ const i18n = {
       coming_soon:'开发中',
       show_more:'显示更多选项',
       tool_cut:'剪切', tool_copy:'复制', tool_paste:'粘贴', tool_rename:'重命名', tool_share:'共享', tool_delete:'删除', tool_properties:'属性',
+      list_desc:'枚举本机 Windows 11 现代菜单项：第三方稀疏包（MSIX）注册的扩展可启停，系统内置命令只读展示。',
+      grp_packaged:'第三方扩展（可启停）', grp_system:'系统内置命令（只读）',
+      empty_packaged:'未发现第三方现代菜单扩展', empty_system:'无可展示的系统命令',
+      list_warn:'启停通过写入 Shell Extensions 黑名单实现，改动后需重启资源管理器（explorer.exe）生效。系统内置命令只读，误封锁可能导致现代菜单整体回退到经典菜单。',
     },
     about:{
       body:'在 Windows 11 上重新主理你的鼠标右键菜单。可视化编辑、批量管理、一键找回经典菜单。<br>纯本地运行，只改当前用户注册表，随时可逆。',
@@ -1549,6 +1603,10 @@ const i18n = {
       coming_soon:'開發中',
       show_more:'顯示更多選項',
       tool_cut:'剪下', tool_copy:'複製', tool_paste:'貼上', tool_rename:'重新命名', tool_share:'共用', tool_delete:'刪除', tool_properties:'內容',
+      list_desc:'管理 Win11 現代選單裡的具體項目：第三方擴充（PackagedCom）可啟停，系統命令唯讀。',
+      grp_packaged:'第三方擴充（可啟停）', grp_system:'系統命令（唯讀）',
+      empty_packaged:'未偵測到第三方 Win11 選單擴充', empty_system:'無系統現代選單項',
+      list_warn:'啟停後需重啟資源管理器（或登出重登）方能生效。系統命令唯讀：誤封鎖可能導致整個現代選單回退為經典選單。',
     },
     about:{
       body:'在 Windows 11 上重新主理你的滑鼠右鍵選單。視覺化編輯、批次管理、一鍵找回經典選單。<br>純本機執行，只改目前使用者登錄檔，隨時可逆。',
@@ -1688,6 +1746,10 @@ const i18n = {
       coming_soon:'In development',
       show_more:'Show more options',
       tool_cut:'Cut', tool_copy:'Copy', tool_paste:'Paste', tool_rename:'Rename', tool_share:'Share', tool_delete:'Delete', tool_properties:'Properties',
+      list_desc:'Manage individual items in the Win11 modern menu: third-party extensions (PackagedCom) can be toggled; system commands are read-only.',
+      grp_packaged:'Third-party extensions (toggleable)', grp_system:'System commands (read-only)',
+      empty_packaged:'No third-party Win11 menu extensions detected', empty_system:'No system modern-menu items',
+      list_warn:'Toggling takes effect after restarting Explorer (or signing out and back in). System commands are read-only: blocking the wrong one may make the entire modern menu fall back to the classic menu.',
     },
     about:{
       body:'Take charge of your right-click menu on Windows 11. Visual editing, batch management, one-click classic-menu restore.<br>Runs fully local, touches only the current-user registry, fully reversible.',
@@ -1883,6 +1945,11 @@ const app = createApp({
 
       menuStatus: { classic: false },
 
+      // Win11 现代菜单项（PackagedCom 可启停 + 系统白名单只读）。
+      win11Items: [],
+      win11Loading: false,
+      win11Loaded: false,
+
       toast: { msg:'', kind:'' }, _toastTimer:null,
       confirm: { show:false, title:'', desc:'', onYes:null },
     };
@@ -1907,6 +1974,16 @@ const app = createApp({
     // WYSIWYG 里显示的项：先 verb 再 handler，handler 前自动加分隔线（视觉上靠近真实 Win11）。
     // visibleItems used by WYSIWYG: keep order, separator is implicit in markup.
     visibleItems() { return this.items; },
+
+    // Win11 现代菜单项按来源分两组：packaged（第三方可启停）+ system（内置只读）。
+    // Win11 modern items grouped by source: packaged (toggleable) + system (read-only).
+    win11Grouped() {
+      const packaged = [], system = [];
+      for (const it of this.win11Items) {
+        (it.source === 'system' ? system : packaged).push(it);
+      }
+      return { packaged, system };
+    },
 
     // Win+X 新增项可选目标组：现有分组并 Group1~3（去重，Group3 在前与菜单一致）。
     // Groups available when adding a Win+X item: existing groups ∪ Group1~3.
@@ -2020,6 +2097,8 @@ const app = createApp({
   },
   watch: {
     lang() { document.documentElement.lang = this.lang; },
+    // 首次进 Win11 专区时懒加载现代菜单项（枚举包清单较慢，避免开机即扫）。
+    tab(v) { if (v === 'win11') this.loadWin11(); },
   },
   mounted() {
     this.initLang();
@@ -2868,6 +2947,49 @@ const app = createApp({
         const r = await window.get_menu_status();
         this.menuStatus = r || { classic:false };
       } catch (e) {}
+    },
+    // Win11 现代菜单项：枚举 PackagedCom + 白名单系统命令，启停走黑名单双写。
+    async loadWin11(force) {
+      if (this.win11Loaded && !force) return;
+      if (!window.scan_win11) return;
+      this.win11Loading = true;
+      try {
+        const arr = await window.scan_win11();   // bind 返回即数组（踩坑 1）
+        const list = Array.isArray(arr) ? arr : [];
+        for (const it of list) it.icon = '';
+        this.win11Items = list;
+        this.win11Loaded = true;
+        this.loadWin11Icons();
+      } catch (e) {
+        this.showToast(this.t('toast.load_failed') + ' (' + e + ')', 'err');
+      } finally {
+        this.win11Loading = false;
+      }
+    },
+    async loadWin11Icons() {
+      if (!window.extract_icon) return;
+      const target = this.win11Items;   // 遍历 reactive 数组（同 loadSpecialIcons）
+      await Promise.all(target.map(async (it) => {
+        if (!it.iconSource) return;
+        try {
+          const uri = await window.extract_icon(it.iconSource);
+          if (uri && uri.indexOf('data:image') === 0) it.icon = uri;
+        } catch (e) { /* 静默 */ }
+      }));
+    },
+    // 启停一个 Win11 项：仅 packaged 项（canToggle）。system 项只读。
+    async win11Toggle(it) {
+      if (it.canToggle === false) return;
+      const next = !it.enabled;
+      const r = await this.callBackend('set_win11_enabled', it.clsid, it.label || '', next);
+      if (r && r.ok) {
+        it.enabled = next;
+        it.blockedMachine = !next;
+        it.blockedUser = !next;
+        this.showToast(this.t('win11.warn'), 'ok');   // 提醒重启资源管理器
+      } else {
+        this.showToast(this.t('toast.'+ (r?.key || 'sp_failed')), 'err');
+      }
     },
     doToggle() { return this.runMenuOp(window.toggle_classic_menu); },
     doEnable() { return this.runMenuOp(window.enable_classic_menu); },

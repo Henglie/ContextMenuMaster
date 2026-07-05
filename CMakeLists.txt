@@ -63,6 +63,7 @@ add_library(cmm_core STATIC
     src/platform/windows/dragdrop_menu.cpp
     src/platform/windows/shellnew_menu.cpp
     src/platform/windows/openwith_menu.cpp
+    src/platform/windows/win11menu.cpp
 )
 
 target_include_directories(cmm_core PUBLIC
@@ -76,7 +77,7 @@ if(WIN32)
     # 其余为 WebView2/COM/Shell 相关，对标 FairySave 的链接集。
     target_link_libraries(cmm_core PUBLIC
         advapi32 user32 shell32 gdi32 gdiplus crypt32
-        ole32 oleaut32 version shlwapi
+        ole32 oleaut32 version shlwapi xmllite
     )
     target_compile_definitions(cmm_core PUBLIC
         _WIN32_WINNT=0x0A00      # 目标 Win10/11（RegDeleteTreeW 需 Vista+，此处取更高）

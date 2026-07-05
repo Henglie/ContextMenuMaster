@@ -25,6 +25,7 @@
 #include "platform/windows/dragdrop_menu.h"
 #include "platform/windows/shellnew_menu.h"
 #include "platform/windows/openwith_menu.h"
+#include "platform/windows/win11menu.h"
 
 #include <windows.h>
 #include <cstdio>
@@ -76,7 +77,10 @@ void print_usage() {
               "  CmmCli shellnew list    list ShellNew (New menu) items as JSON\n"
               "  CmmCli shellnew toggle <on|off> <id>\n"
               "                          enable/disable a New-menu type (moves key; needs admin)\n"
-              "  CmmCli openwith list    list Applications (Open with) apps as JSON");
+              "  CmmCli openwith list    list Applications (Open with) apps as JSON\n"
+              "\n"
+              "  CmmCli win11 list       list Win11 modern menu items as JSON\n"
+              "  CmmCli win11 toggle <on|off> <clsid> [displayName]");
 }
 
 }  // namespace
@@ -463,6 +467,39 @@ int main(int argc, char** argv) {
         std::fwrite("\n", 1, 1, stdout);
         std::fflush(stdout);
         return 0;
+    }
+
+    // Win11 现代菜单：
+    //   CmmCli win11 list
+    //   CmmCli win11 toggle <on|off> <clsid> [displayName]
+    if (std::strcmp(cmd, "win11") == 0) {
+        if (argc < 3) {
+            std::puts("usage: CmmCli win11 <list|toggle>");
+            return 1;
+        }
+        if (std::strcmp(argv[2], "list") == 0) {
+            std::string json = cmm::scan_win11menu_json();
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        if (std::strcmp(argv[2], "toggle") == 0) {
+            if (argc < 5) {
+                std::puts("usage: CmmCli win11 toggle <on|off> <clsid> [displayName]");
+                return 1;
+            }
+            bool enabled = (std::strcmp(argv[3], "on") == 0);
+            std::string clsid = argv[4];
+            std::string disp = (argc >= 6) ? argv[5] : "";
+            std::string json = cmm::set_win11menu_enabled(clsid, disp, enabled);
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
+        std::printf("unknown win11 subcommand: %s\n", argv[2]);
+        return 1;
     }
 
     std::printf("unknown command: %s\n\n", cmd);

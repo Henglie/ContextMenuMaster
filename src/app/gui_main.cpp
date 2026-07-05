@@ -28,6 +28,7 @@
 #include "platform/windows/dragdrop_menu.h"
 #include "platform/windows/shellnew_menu.h"
 #include "platform/windows/openwith_menu.h"
+#include "platform/windows/win11menu.h"
 #include <vector>
 
 #pragma comment(lib, "comctl32.lib")
@@ -566,10 +567,52 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             }).detach();
         }, nullptr);
 
-    // —— OpenWith：打开方式应用列表（只读枚举 Applications，无启停）——
+    // —— OpenWith：打开方式应用列表（枚举 + 启停/增删）——
+    //  scan 同步；写操作走异步 3 参 bind（对齐 sendto/shellnew）。
     w.bind("scan_openwith", [](const std::string&) -> std::string {
         return cmm::scan_openwith_json();
     });
+    w.bind("set_openwith_enabled",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id = parse_string_arg_at(req, 0);
+            bool enabled = (parse_string_arg_at(req, 1) == "true");
+            std::thread([&w, seq, id, enabled]() {
+                w.resolve(seq, 0, cmm::set_openwith_enabled(id, enabled));
+            }).detach();
+        }, nullptr);
+    w.bind("add_openwith_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string target = parse_string_arg_at(req, 0);
+            std::string name = parse_string_arg_at(req, 1);
+            std::thread([&w, seq, target, name]() {
+                w.resolve(seq, 0, cmm::add_openwith_item(target, name));
+            }).detach();
+        }, nullptr);
+    w.bind("del_openwith_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id = parse_string_arg_at(req, 0);
+            std::thread([&w, seq, id]() {
+                w.resolve(seq, 0, cmm::del_openwith_item(id));
+            }).detach();
+        }, nullptr);
+
+    // —— Win11 现代菜单：枚举 PackagedCom + 白名单系统命令；启停走黑名单双写 ——
+    //  scan 要解析多个包清单（IXmlReader 读文件），可能上百毫秒，走异步避免卡 UI。
+    w.bind("scan_win11",
+        [&w](const std::string& seq, const std::string&, void*) {
+            std::thread([&w, seq]() {
+                w.resolve(seq, 0, cmm::scan_win11menu_json());
+            }).detach();
+        }, nullptr);
+    w.bind("set_win11_enabled",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string clsid = parse_string_arg_at(req, 0);
+            std::string disp = parse_string_arg_at(req, 1);
+            bool enabled = (parse_string_arg_at(req, 2) == "true");
+            std::thread([&w, seq, clsid, disp, enabled]() {
+                w.resolve(seq, 0, cmm::set_win11menu_enabled(clsid, disp, enabled));
+            }).detach();
+        }, nullptr);
 
     // —— 绑定：用默认浏览器打开外链 —— 参数 ["https://..."]
     // 只放行 https:// 开头的网址（白名单 schema），杜绝 file:// / 任意命令注入。
