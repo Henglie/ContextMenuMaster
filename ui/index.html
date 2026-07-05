@@ -308,6 +308,48 @@
   .sp-item .wi-target{ font-size:11px; color:var(--fg-muted);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .sp-item .wi-switch{ flex-shrink:0; }
+
+  /* —— 特殊菜单可视化：把「发送到 / 新建 / 拖放 / 打开方式」渲染成一张真实的
+     级联飞出子菜单对象。父项常驻，悬停/点击后向右飞出子项列，子项行内联启停
+     开关与删除。自包含暗色玻璃风（在暗色 UI 壳内，不走 preview-theme）。 */
+  .sp-visual{ display:flex; align-items:flex-start; gap:0; padding:20px 8px 8px;
+    min-height:120px; }
+  .spv-menu{ min-width:200px; background:var(--glass-fill-strong,rgba(30,34,44,.92));
+    border:1px solid var(--glass-stroke); border-radius:var(--radius-sm);
+    padding:4px; box-shadow:0 10px 34px rgba(0,0,0,.4); backdrop-filter:blur(20px); }
+  .spv-parent{ display:grid; grid-template-columns:24px 1fr auto; align-items:center;
+    gap:8px; padding:7px 10px; border-radius:6px; cursor:default;
+    background:var(--accent-soft); color:var(--fg); }
+  .spv-parent .g{ display:flex; align-items:center; justify-content:center; color:var(--accent); }
+  .spv-parent .nm{ font-size:13px; font-weight:500; white-space:nowrap; }
+  .spv-parent .arr{ font-size:10px; color:var(--fg-dim); }
+  /* 飞出列：紧贴父项右侧 */
+  .spv-flyout{ margin-left:6px; min-width:220px; max-width:340px;
+    background:var(--glass-fill-strong,rgba(30,34,44,.92)); border:1px solid var(--glass-stroke);
+    border-radius:var(--radius-sm); padding:4px; box-shadow:0 10px 34px rgba(0,0,0,.4);
+    backdrop-filter:blur(20px); align-self:flex-start; }
+  .spv-group{ font-size:10.5px; font-weight:600; color:var(--fg-dim); letter-spacing:.4px;
+    text-transform:uppercase; padding:6px 10px 3px; }
+  .spv-group:first-child{ padding-top:2px; }
+  .spv-row{ display:grid; grid-template-columns:22px 1fr auto auto; align-items:center;
+    gap:8px; padding:6px 8px 6px 10px; border-radius:6px; transition:background var(--dur-quick); }
+  .spv-row:hover{ background:var(--ctx-hover,rgba(255,255,255,.06)); }
+  .spv-row.disabled{ opacity:.4; }
+  .spv-row .g{ display:flex; align-items:center; justify-content:center;
+    color:var(--fg-dim); font-size:13px; }
+  .spv-row .g .glyph-img{ width:18px; height:18px; object-fit:contain; }
+  .spv-row .nm{ font-size:12.5px; color:var(--fg); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  .spv-row .nm .sys{ font-size:9px; margin-left:5px; padding:0 4px; border-radius:3px;
+    border:1px solid var(--glass-stroke); color:var(--fg-dim); vertical-align:middle; }
+  .spv-row .sw{ flex-shrink:0; }
+  .spv-row .ro{ font-size:10px; color:var(--fg-dim); padding-right:2px; }
+  .spv-row .del{ width:22px; height:22px; display:inline-flex; align-items:center;
+    justify-content:center; border-radius:5px; border:1px solid transparent;
+    color:var(--fg-dim); cursor:pointer; font-size:12px; background:transparent; }
+  .spv-row .del:hover{ border-color:var(--warn); color:var(--warn); }
+  .spv-row .del:disabled{ opacity:.35; cursor:not-allowed; }
+  .spv-empty{ padding:10px 12px; font-size:12px; color:var(--fg-muted); }
   .sp-item .wi-del{ flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;
     width:30px; height:30px; padding:0; border-radius:var(--radius-sm);
     background:var(--glass-fill); border:1px solid var(--glass-stroke); color:var(--fg-muted);
@@ -879,6 +921,43 @@
           <div v-else-if="!spItems.length" class="empty">{{ t('sp.'+scene+'_empty') }}</div>
 
           <template v-else>
+            <!-- 可视化：把整个特殊菜单渲染成一张级联飞出子菜单对象。父项常驻，
+                 右侧飞出列出所有子项，行内直接启停/删除（与下方列表联动同一份 spItems）。 -->
+            <div class="cat-title">{{ t('sp.visual_section') }}</div>
+            <div class="card glass" style="padding:0;">
+              <div class="sp-visual">
+                <div class="spv-menu">
+                  <div class="spv-parent">
+                    <span class="g"><span>{{ spGlyph }}</span></span>
+                    <span class="nm">{{ t('scene.'+scene) }}</span>
+                    <span class="arr">▶</span>
+                  </div>
+                </div>
+                <div class="spv-flyout">
+                  <template v-for="(it, idx) in spItems" :key="it.id">
+                    <div v-if="scene==='dragdrop' && (idx===0 || spItems[idx-1].objectClass !== it.objectClass)"
+                         class="spv-group">{{ it.objectClass }}</div>
+                    <div class="spv-row" :class="{disabled: !it.enabled}">
+                      <span class="g">
+                        <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
+                        <span v-else>▸</span>
+                      </span>
+                      <span class="nm">{{ spLabel(it) }}<span v-if="it.system" class="sys">{{ t('sp.sys') }}</span></span>
+                      <span v-if="it.canToggle === false" class="ro">{{ t('sp.readonly') }}</span>
+                      <span v-else class="sw">
+                        <span class="switch" :class="{on: it.enabled}" @click="spToggle(it)"><span class="knob"></span></span>
+                      </span>
+                      <button v-if="scene==='sendto' || (scene==='openwith' && !it.system) || (scene==='shellnew' && !it.system)"
+                              class="del" @click="spDel(it)" :disabled="busy" :title="t('winx.del')">⌫</button>
+                      <span v-else class="del" style="visibility:hidden;">⌫</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <!-- 详细列表（保留：目标路径/命令等细节 + 增删操作，与上方可视化同源） -->
+            <div class="cat-title">{{ t('sp.detail_section') }}</div>
             <!-- dragdrop 按对象类分组显示小标题；其余场景直接平铺 -->
             <div class="sp-list">
               <template v-for="(it, idx) in spItems" :key="it.id">
@@ -1043,6 +1122,8 @@
                           v-html="renderClassicLabel(it)"></span>
                     <span class="right">
                       <span v-if="it.system" class="sys-mark" :title="t('editor.system_item')">SYS</span>
+                      <span v-if="it.canToggle" class="switch sm" :class="{on: it.enabled}"
+                            @click.stop="askToggle(it)" :title="t('list.enabled')"><span class="knob"></span></span>
                       <span class="sub-arrow">▶</span>
                     </span>
                   </div>
@@ -1074,7 +1155,13 @@
                         v-html="renderClassicLabel(it)"></span>
                   <span class="right">
                     <span v-if="it.system" class="sys-mark" :title="t('editor.system_item')">SYS</span>
-                    <span v-if="it.kind==='handler'">▶</span>
+                    <!-- 行内启停开关：可切换项直接在可视化菜单上开关，无需右键 -->
+                    <span v-if="it.canToggle" class="switch sm" :class="{on: it.enabled}"
+                          @click.stop="askToggle(it)" :title="t('list.enabled')"><span class="knob"></span></span>
+                    <!-- 自建项行内删除（hover 显示） -->
+                    <button v-if="it.custom" class="ctx-row-del" @click.stop="customDel(it)"
+                            :disabled="busy" :title="t('custom.del')">⌫</button>
+                    <span v-if="it.kind==='handler' && !it.canToggle">▶</span>
                   </span>
                 </div>
               </template>
@@ -1193,12 +1280,14 @@
           <div class="card-desc" style="margin:14px 0 0; color:var(--warn);">{{ t('win11.warn') }}</div>
         </div>
 
-        <!-- 现代菜单可视化预览：仿真 Win11 右键现代菜单外观，渲染已启用的 PackagedCom 扩展项。
-             只读示意（现代菜单由系统管理，启停在下方列表操作），让用户直观看到菜单长相。 -->
+        <!-- 现代菜单可视化编辑：仿真 Win11 右键现代菜单外观。列出全部 PackagedCom 扩展项，
+             每行内联启停开关（停用项灰显但仍在菜单里可见，直观反映黑名单状态）。系统项只读。
+             启停即写黑名单双写并自动重启 explorer（同下方逻辑）。 -->
         <div class="cat-title">{{ t('win11.preview_section') }}</div>
         <div class="card glass" style="display:flex; flex-direction:column; align-items:center; gap:10px;">
           <div class="card-desc" style="margin:0; align-self:flex-start;">{{ t('win11.preview_hint') }}</div>
-          <div class="ctx-menu" style="margin:6px 0;">
+          <div v-if="win11Loading" class="loading"><span class="spinner"></span>{{ t('winx.loading') }}</div>
+          <div v-else class="ctx-menu" style="margin:6px 0;">
             <div class="ctx-toolbar">
               <div class="ctx-tool" :title="t('win11.tool_cut')"><span class="gi">✂</span></div>
               <div class="ctx-tool" :title="t('win11.tool_copy')"><span class="gi">⧉</span></div>
@@ -1212,15 +1301,31 @@
               <span class="label">{{ t('win11.demo_open') }}</span>
               <span class="right"></span>
             </div>
-            <template v-if="win11PreviewItems.filter(x=>x.enabled).length">
+            <!-- PackagedCom 扩展项：全部列出，行内开关启停，停用灰显 -->
+            <template v-if="win11Grouped.packaged.length">
               <div class="ctx-sep"></div>
-              <div v-for="it in win11PreviewItems.filter(x=>x.enabled)" :key="it.id" class="ctx-row">
+              <div v-for="it in win11Grouped.packaged" :key="it.id"
+                   class="ctx-row" :class="{disabled: !it.enabled}">
                 <span class="glyph">
                   <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
                   <span v-else>◆</span>
                 </span>
                 <span class="label">{{ it.label }}</span>
-                <span class="right"></span>
+                <span class="right">
+                  <span class="switch sm" :class="{on: it.enabled}" @click.stop="win11Toggle(it)"><span class="knob"></span></span>
+                </span>
+              </div>
+            </template>
+            <!-- 系统项（只读）：列在菜单里但不可切换 -->
+            <template v-if="win11Grouped.system.length">
+              <div class="ctx-sep"></div>
+              <div v-for="it in win11Grouped.system" :key="it.id" class="ctx-row">
+                <span class="glyph">
+                  <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
+                  <span v-else>▤</span>
+                </span>
+                <span class="label">{{ it.label }}</span>
+                <span class="right"><span class="sys-mark">{{ t('sp.readonly') }}</span></span>
               </div>
             </template>
             <div class="ctx-sep"></div>
@@ -1230,7 +1335,7 @@
               <span class="right"><span class="chev">▸</span></span>
             </div>
           </div>
-          <div v-if="!win11PreviewItems.filter(x=>x.enabled).length" class="card-desc" style="margin:0;">{{ t('win11.preview_empty') }}</div>
+          <div v-if="!win11Loading && !win11Grouped.packaged.length && !win11Grouped.system.length" class="card-desc" style="margin:0;">{{ t('win11.preview_empty') }}</div>
         </div>
 
         <div class="cat-title">{{ t('win11.sparse_section') }}</div>
@@ -1462,6 +1567,7 @@ const i18n = {
       shellnew_empty:'未发现带 ShellNew 的扩展名。',
       openwith_empty:'未发现注册在 Applications 下的应用。',
       add:'新增项', readonly:'只读', sys:'系统', unknown_type:'文件',
+      visual_section:'菜单预览（可直接启停/删除）', detail_section:'详细列表',
       add_title:'新增「发送到」项', add_target:'目标路径', add_name:'显示名称',
       sendto_add_title:'新增「发送到」项', openwith_add_title:'新增「打开方式」应用',
       shellnew_add_title:'新增「新建」项', add_ext:'扩展名', add_ext_ph:'如 .md（含点，会建空文件模板）',
@@ -1616,6 +1722,7 @@ const i18n = {
       shellnew_empty:'未發現帶 ShellNew 的副檔名。',
       openwith_empty:'未發現 Applications 下註冊的程式。',
       add:'新增項目', readonly:'唯讀', sys:'系統', unknown_type:'未知類型',
+      visual_section:'選單預覽（可直接啟停/刪除）', detail_section:'詳細清單',
       need_target:'目標路徑不能為空', need_name:'顯示名稱不能為空',
       add_title:'新增「傳送到」項目',
       sendto_add_title:'新增「傳送到」項目', openwith_add_title:'新增「開啟方式」程式',
@@ -1776,6 +1883,7 @@ const i18n = {
       shellnew_empty:'No New-menu items found.',
       openwith_empty:'No registered apps found.',
       add:'Add item', readonly:'Read-only', sys:'System', unknown_type:'File',
+      visual_section:'Menu preview', detail_section:'Item details',
       sendto_add_title:'Add a Send-to item', openwith_add_title:'Add an Open-with app',
       shellnew_add_title:'Add a "New" file type', add_ext:'Extension', add_ext_ph:'e.g. .md (with the dot)',
       del_desc_sn:'Remove the "New" entry for <b>{name}</b>? Only the current-user layer is removed; built-in system types are unaffected.',
@@ -2132,6 +2240,8 @@ const app = createApp({
     },
     // 当前特殊场景是否支持新增项（sendto / openwith / shellnew）。
     spCanAdd() { return this.scene === 'sendto' || this.scene === 'openwith' || this.scene === 'shellnew'; },
+    // 特殊场景可视化父项的字形（取 specialScenes 元数据）。
+    spGlyph() { const s = this.specialScenes.find(x => x.id === this.scene); return s ? s.glyph : '▸'; },
 
     // 全局搜索结果：对内存索引 searchIndex 做多字段忽略大小写匹配，最多 40 条。
     // 匹配 label / id / target / command / ext；空查询返回空。跨所有场景（含特殊菜单）。
