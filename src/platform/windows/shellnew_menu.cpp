@@ -315,11 +315,15 @@ std::vector<ShellNewItem> scan_shellnew() {
 
         std::wstring progId = loc.underProgId ? loc.progId : ext_progid(ext);
         std::wstring friendly = friendly_type_name(ext, progId);
-        std::wstring label = friendly.empty()
-            ? (ext + L" 文件")   // 无友好名回落（前端会用 label 直接显示；此处仅兜底）
-            : friendly;
-        // 显示名统一带上扩展名，便于区分（如「文本文档 (.txt)」）。
-        item.label = wide_to_utf8(label + L" (" + ext + L")");
+        // 后端只给数据，不拼中文（踩坑 8：后端绝不返中文，i18n 全在前端）。
+        // friendlyName 是注册表里已本地化的关联类型名（系统给的，非我们造的），可空；
+        // 前端按 friendlyName + ext 自拼显示名，friendly 为空时前端用 i18n「未知类型」兜底。
+        item.friendlyName = wide_to_utf8(friendly);
+        // label 保留一份供旧前端/CLI 兜底：有友好名用「友好名 (.ext)」，否则仅 ".ext"，
+        // 不再拼硬编码「文件」中文。
+        item.label = friendly.empty()
+            ? item.ext
+            : wide_to_utf8(friendly + L" (" + ext + L")");
 
         std::wstring icon = progid_icon(progId);
         if (!icon.empty()) item.iconSource = wide_to_utf8(icon);
@@ -344,6 +348,7 @@ std::string scan_shellnew_json() {
         out += "{\"id\":\"";        out += json_escape(it.id);         out += "\"";
         out += ",\"ext\":\"";       out += json_escape(it.ext);        out += "\"";
         out += ",\"label\":\"";     out += json_escape(it.label);      out += "\"";
+        out += ",\"friendlyName\":\"";out += json_escape(it.friendlyName); out += "\"";
         out += ",\"iconSource\":\"";out += json_escape(it.iconSource); out += "\"";
         out += ",\"enabled\":";     out += it.enabled ? "true" : "false";
         out += "}";
@@ -379,6 +384,61 @@ std::string set_shellnew_enabled(const std::string& id, bool enabled) {
             return result_json(true, "ok");
         return result_json(false, "registry_failed");
     }
+    return result_json(true, "ok");
+}
+
+// —— 新增：在 HKCU\Software\Classes\<ext>\ShellNew 写 NullFile ——
+std::string add_shellnew_item(const std::string& id) {
+    std::wstring ext = utf8_to_wide(id);
+    if (ext.empty() || ext[0] != L'.') return result_json(false, "bad_id");
+    if (ext.find(L"..") != std::wstring::npos ||
+        ext.find(L'\\') != std::wstring::npos ||
+        ext.find(L'/') != std::wstring::npos)
+        return result_json(false, "bad_id");
+
+    // 已有 ShellNew（任一 hive、启用或停用镜像）则拒，避免覆盖既有新建项。
+    if (locate_shellnew(ext).found) return result_json(false, "already_exists");
+
+    // 写用户覆盖层 HKCU\Software\Classes\<ext>\ShellNew，值 NullFile=""（建空文件）。
+    std::wstring path = L"Software\\Classes\\" + ext + L"\\ShellNew";
+    HKEY h = nullptr;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, path.c_str(), 0, nullptr, 0,
+                        KEY_SET_VALUE, nullptr, &h, nullptr) != ERROR_SUCCESS)
+        return result_json(false, "registry_failed");
+    const wchar_t empty[] = L"";
+    RegSetValueExW(h, L"NullFile", 0, REG_SZ,
+                   reinterpret_cast<const BYTE*>(empty), sizeof(wchar_t));
+    RegCloseKey(h);
+    return result_json(true, "ok");
+}
+
+// —— 删除：仅移除 HKCU 下 <ext> 的 ShellNew / -ShellNew（系统项拒删）——
+std::string del_shellnew_item(const std::string& id) {
+    std::wstring ext = utf8_to_wide(id);
+    if (ext.empty() || ext[0] != L'.') return result_json(false, "bad_id");
+    if (ext.find(L"..") != std::wstring::npos ||
+        ext.find(L'\\') != std::wstring::npos ||
+        ext.find(L'/') != std::wstring::npos)
+        return result_json(false, "bad_id");
+
+    // 该扩展名的 ShellNew 是否存在于 HKCU（含停用镜像）？只删用户层。
+    std::wstring base = L"Software\\Classes\\" + ext + L"\\";
+    bool inHkcu = false;
+    for (const wchar_t* sub : { L"ShellNew", L"-ShellNew" }) {
+        HKEY h = nullptr;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, (base + sub).c_str(), 0, KEY_READ, &h)
+            == ERROR_SUCCESS) { RegCloseKey(h); inHkcu = true; }
+    }
+    if (!inHkcu) {
+        // HKLM 有但 HKCU 无 = 系统内建项，拒删（避免破坏内建新建类型）。
+        if (locate_shellnew(ext).found) return result_json(false, "system_readonly");
+        return result_json(false, "not_found");
+    }
+
+    // 删 HKCU 下两种形态（启用 + 停用镜像）。写前不备份——仅删用户覆盖层，
+    // 系统内建项已在上面拒绝（system_readonly），删的都是本工具/用户自己写的。
+    RegDeleteTreeW(HKEY_CURRENT_USER, (base + L"ShellNew").c_str());
+    RegDeleteTreeW(HKEY_CURRENT_USER, (base + L"-ShellNew").c_str());
     return result_json(true, "ok");
 }
 

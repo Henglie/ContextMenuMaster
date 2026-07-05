@@ -87,14 +87,25 @@
   }
 
   /* ---- 侧栏 / Sidebar ---- */
-  .side{ width:200px; flex-shrink:0; display:flex; flex-direction:column; padding:16px 12px; }
-  .brand{ font-size:16px; font-weight:700; padding:6px 10px 2px; letter-spacing:.3px;
+  /* 侧栏满高、纵向 flex；场景多时靠 .nav 内部滚动，品牌/页脚固定不挤走。
+     height:100% + min-height:0 是让 flex 子项 .nav 能收缩并出滚动条的关键。 */
+  .side{ width:200px; flex-shrink:0; height:100%; display:flex; flex-direction:column;
+    padding:16px 12px; overflow:hidden; }
+  .brand{ flex-shrink:0; font-size:16px; font-weight:700; padding:6px 10px 2px; letter-spacing:.3px;
     background:linear-gradient(180deg,var(--fg),var(--accent-bright));
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
   .brand .en{ display:block; font-size:11px; color:var(--fg-dim); font-weight:400;
     margin-top:3px; letter-spacing:1px; -webkit-text-fill-color:var(--fg-dim); }
-  .nav{ margin-top:18px; display:flex; flex-direction:column; gap:4px; flex:1; }
+  /* flex:1 占满中段，min-height:0 允许收缩，overflow-y:auto 项超高时内部滚动。 */
+  .nav{ margin-top:18px; display:flex; flex-direction:column; gap:4px;
+    flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; }
+  /* 侧栏滚动条走玻璃细样式，不喧宾夺主。 */
+  .nav::-webkit-scrollbar{ width:7px; }
+  .nav::-webkit-scrollbar-thumb{ background:var(--glass-stroke); border-radius:4px; }
+  .nav::-webkit-scrollbar-thumb:hover{ background:rgba(var(--glow-a),.4); }
+  .nav::-webkit-scrollbar-track{ background:transparent; }
   .nav-item{
+    flex-shrink:0;
     display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--radius-sm);
     color:var(--fg-muted); cursor:pointer; font-size:13.5px; font-weight:500;
     transition:background var(--dur-quick) var(--ease-snap), color var(--dur-quick) var(--ease-snap);
@@ -103,7 +114,7 @@
   .nav-item:hover{ background:var(--glass-fill-strong); color:var(--fg); }
   .nav-item.on{ background:var(--accent-soft); color:var(--fg); border-color:rgba(var(--glow-a),.32); }
   .nav-item .ic{ width:14px; text-align:center; font-size:11px; opacity:.85; }
-  .foot{ font-size:11px; color:var(--fg-dim); padding:8px 10px 2px; line-height:1.6; }
+  .foot{ flex-shrink:0; font-size:11px; color:var(--fg-dim); padding:8px 10px 2px; line-height:1.6; }
 
   /* ---- 主区 / Main ---- */
   .main{ flex:1; display:flex; flex-direction:column; overflow:hidden; gap:14px; min-width:0; }
@@ -114,6 +125,46 @@
     position:relative; z-index:40; }
   .header .title{ font-size:17px; font-weight:650; }
   .header .spacer{ flex:1; }
+
+  /* 全局搜索框（标题栏跳转搜索器，非页内筛选）/ Global search box (jump search) */
+  .search-wrap{ position:relative; width:260px; flex-shrink:0; }
+  .search-box{ display:flex; align-items:center; gap:7px; padding:7px 11px; border-radius:var(--radius-pill);
+    background:var(--glass-fill); border:1px solid var(--glass-stroke);
+    transition:border-color var(--dur-quick), background var(--dur-quick); }
+  .search-box:focus-within{ border-color:rgba(var(--glow-a),.5); background:var(--glass-fill-strong); }
+  .search-box .s-ic{ font-size:12px; color:var(--fg-dim); flex-shrink:0; }
+  .search-box input{ flex:1; min-width:0; background:transparent; border:none; outline:none;
+    color:var(--fg); font-size:12.5px; font-family:inherit; }
+  .search-box input::placeholder{ color:var(--fg-dim); }
+  .search-box .s-clear{ flex-shrink:0; cursor:pointer; color:var(--fg-dim); font-size:13px;
+    width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;
+    border-radius:50%; transition:color var(--dur-quick), background var(--dur-quick); }
+  .search-box .s-clear:hover{ color:var(--fg); background:var(--glass-fill-strong); }
+  /* 搜索结果下拉：跨场景跳转结果，左对齐、场景标签 + 高亮命中 + 目标副行 */
+  .search-pop{ left:0; right:auto; width:340px; max-height:60vh; overflow-y:auto;
+    top:calc(100% + 6px); padding:5px; }
+  .search-pop .search-empty{ padding:12px; font-size:12.5px; color:var(--fg-dim); text-align:center; }
+  .search-pop .search-count{ padding:6px 10px 4px; font-size:11px; color:var(--fg-dim); }
+  .search-pop .search-row{ padding:8px 10px; border-radius:7px; cursor:pointer;
+    display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto auto; gap:1px 8px;
+    transition:background var(--dur-quick); }
+  .search-pop .search-row:hover{ background:var(--glass-fill-strong); }
+  .search-pop .sr-scene{ grid-row:1/2; grid-column:1/2; align-self:center; font-size:10.5px;
+    color:var(--accent-bright); background:var(--accent-soft); padding:1px 7px; border-radius:8px;
+    white-space:nowrap; }
+  .search-pop .sr-label{ grid-row:1/2; grid-column:2/3; font-size:13px; color:var(--fg);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .search-pop .sr-label mark{ background:rgba(var(--glow-a),.28); color:var(--accent-bright);
+    border-radius:2px; padding:0 1px; }
+  .search-pop .sr-sub{ grid-row:2/3; grid-column:2/3; font-size:11px; color:var(--fg-muted);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* 搜索命中后目标项短暂高亮闪烁 / Flash the jumped-to item after search */
+  .search-hit-flash{ animation:search-flash 1.6s var(--ease-snap); }
+  @keyframes search-flash{
+    0%,100%{ box-shadow:none; }
+    15%{ box-shadow:0 0 0 2px rgba(var(--glow-a),.7), 0 0 18px rgba(var(--glow-a),.4); }
+    60%{ box-shadow:0 0 0 2px rgba(var(--glow-a),.35); }
+  }
 
   /* 顶栏圆形按钮（主题/语言）/ Round header buttons */
   .icon-pill{ display:inline-flex; align-items:center; gap:7px; padding:7px 12px; border-radius:var(--radius-pill);
@@ -694,6 +745,30 @@
       <div class="title">{{ headerTitle }}</div>
       <div class="spacer"></div>
 
+      <!-- 全局搜索：跨所有场景跳转搜索（非页面内筛选）。基于内存索引，输入即匹配。 -->
+      <!-- Global search: cross-scene jump searcher over an in-memory index. -->
+      <div class="search-wrap" @click.stop>
+        <div class="search-box" :class="{active: searchOpen}">
+          <span class="s-ic">⌕</span>
+          <input type="text" v-model="search" :placeholder="t('search.placeholder')"
+                 @focus="searchOpen=true" @input="searchOpen=true"
+                 @keydown.esc="closeSearch" @keydown.enter="searchEnter" />
+          <span v-if="search" class="s-clear" @click="search=''; searchOpen=false">×</span>
+        </div>
+        <div v-if="searchOpen && search" class="search-pop popover glass" @click.stop>
+          <div v-if="!searchResults.length" class="search-empty">{{ t('search.empty') }}</div>
+          <template v-else>
+            <div class="search-count">{{ t('search.count', { n: searchResults.length }) }}</div>
+            <div v-for="r in searchResults" :key="r.scene+'|'+r.id" class="search-row"
+                 @click="gotoSearchResult(r)">
+              <span class="sr-scene">{{ sceneDisplayName(r.scene) }}</span>
+              <span class="sr-label" v-html="highlightMatch(r.label)"></span>
+              <span v-if="r.target || r.command" class="sr-sub">{{ r.target || r.command }}</span>
+            </div>
+          </template>
+        </div>
+      </div>
+
       <!-- 主题切换：跟随系统/浅色/深色 -->
       <!-- Theme toggle: system / light / dark -->
       <div class="theme-wrap">
@@ -757,7 +832,7 @@
               </div>
               <div class="winx-items">
                 <div v-if="!grp.items.length" class="winx-item-empty">{{ t('winx.group_empty') }}</div>
-                <div v-for="it in grp.items" :key="it.id" class="winx-item" :class="{disabled: !it.enabled}">
+                <div v-for="it in grp.items" :key="it.id" class="winx-item" :class="{disabled: !it.enabled}" :data-item-id="it.id">
                   <span class="wi-glyph">
                     <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
                     <span v-else>▸</span>
@@ -789,7 +864,7 @@
             <button class="btn sm" @click="loadSpecial(scene, true)" :disabled="busy">
               <span class="ic">↻</span>{{ t('winx.refresh') }}
             </button>
-            <button v-if="scene==='sendto'" class="btn sm primary" @click="sendtoAddOpen" :disabled="busy">
+            <button v-if="spCanAdd" class="btn sm primary" @click="spAddOpen" :disabled="busy">
               <span class="ic">＋</span>{{ t('sp.add') }}
             </button>
           </div>
@@ -803,13 +878,13 @@
               <template v-for="(it, idx) in spItems" :key="it.id">
                 <div v-if="scene==='dragdrop' && (idx===0 || spItems[idx-1].objectClass !== it.objectClass)"
                      class="sp-group-head">{{ it.objectClass }}</div>
-                <div class="sp-item" :class="{disabled: !it.enabled}">
+                <div class="sp-item" :class="{disabled: !it.enabled}" :data-item-id="it.id">
                   <span class="wi-glyph">
                     <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
                     <span v-else>▸</span>
                   </span>
                   <span class="wi-meta">
-                    <span class="wi-name">{{ it.label }}<span v-if="it.system" class="sp-sys">{{ t('sp.sys') }}</span></span>
+                    <span class="wi-name">{{ spLabel(it) }}<span v-if="it.system" class="sp-sys">{{ t('sp.sys') }}</span></span>
                     <span class="wi-target" :title="it.target || it.command || it.ext">{{ it.target || it.command || it.ext }}</span>
                   </span>
                   <!-- openwith 只读：不渲染开关，标注只读 -->
@@ -818,7 +893,7 @@
                     <span class="switch" :class="{on: it.enabled}"
                           @click="spToggle(it)"><span class="knob"></span></span>
                   </span>
-                  <button v-if="scene==='sendto'" class="wi-del" @click="sendtoDel(it)" :disabled="busy" :title="t('winx.del')">
+                  <button v-if="scene==='sendto' || (scene==='openwith' && !it.system) || (scene==='shellnew' && !it.system)" class="wi-del" @click="spDel(it)" :disabled="busy" :title="t('winx.del')">
                     <span class="ic">⌫</span>
                   </button>
                 </div>
@@ -1041,7 +1116,7 @@
               <span style="text-align:center">{{ t('list.enabled') }}</span>
               <span style="text-align:right">{{ t('list.actions') }}</span>
             </div>
-            <div v-for="it in items" :key="it.id" class="lrow">
+            <div v-for="it in items" :key="it.id" class="lrow" :data-item-id="it.id">
               <span>
                 <span class="ck" :class="{on: it._checked}" @click="it._checked=!it._checked">
                   <span class="tick" v-if="it._checked">✓</span>
@@ -1200,23 +1275,24 @@
     </div>
   </div>
 
-  <!-- 发送到 新增项弹层 / SendTo add-item modal -->
+  <!-- 特殊场景 新增项弹层（发送到 / 打开方式共用）/ Special-scene add-item modal -->
   <div v-if="sendtoAdd.show" class="modal-mask" @click.self="sendtoAdd.show=false">
     <div class="modal winx-add-modal">
-      <div class="title">{{ t('sp.sendto_add_title') }}</div>
+      <div class="title">{{ t('sp.'+scene+'_add_title') }}</div>
       <div class="winx-add-body">
         <label class="wa-field">
-          <span class="wa-label">{{ t('sp.add_target') }}</span>
-          <input class="wa-input" type="text" v-model="sendtoAdd.target" :placeholder="t('sp.add_target_ph')" />
+          <span class="wa-label">{{ scene==='shellnew' ? t('sp.add_ext') : t('sp.add_target') }}</span>
+          <input class="wa-input" type="text" v-model="sendtoAdd.target"
+                 :placeholder="scene==='shellnew' ? t('sp.add_ext_ph') : t('sp.add_target_ph')" />
         </label>
-        <label class="wa-field">
+        <label v-if="scene!=='shellnew'" class="wa-field">
           <span class="wa-label">{{ t('sp.add_name') }}</span>
           <input class="wa-input" type="text" v-model="sendtoAdd.name" :placeholder="t('sp.add_name_ph')" />
         </label>
       </div>
       <div class="actions">
         <button class="btn" @click="sendtoAdd.show=false">{{ t('common.cancel') }}</button>
-        <button class="btn primary" :disabled="busy" @click="sendtoAddCommit">{{ t('common.confirm') }}</button>
+        <button class="btn primary" :disabled="busy" @click="spAddCommit">{{ t('common.confirm') }}</button>
       </div>
     </div>
   </div>
@@ -1273,18 +1349,25 @@ const i18n = {
       sendto_slogan:'右键「发送到」子菜单的项（存于 %APPDATA%\\Microsoft\\Windows\\SendTo）。停用＝加 .disabled 后缀，可逆；可新增指向任意程序/文件夹的项。',
       dragdrop_slogan:'拖放处理程序：右键拖拽文件到文件夹/驱动器松开时弹出的菜单由它们决定。停用＝子键搬到 -DragDropHandlers，可逆。按对象类分组。',
       shellnew_slogan:'右键「新建」子菜单的项（带 ShellNew 的扩展名）。停用＝ ShellNew 子键改名为 -ShellNew，可逆。写前自动备份注册表。',
-      openwith_slogan:'右键「打开方式」候选应用（注册在 Applications 下的程序）。仅只读枚举——启停涉及系统文件关联，风险较高，暂不提供。',
+      openwith_slogan:'右键「打开方式」候选应用（注册在 Applications 下）。停用＝写 NoOpenWith（应用从列表隐藏），可逆；可新增指向任意程序的项（写当前用户）。系统项（HKLM）不可删，用户新增项可删。',
       sendto_empty:'未发现「发送到」项（或找不到 SendTo 目录）。',
       dragdrop_empty:'未发现拖放处理程序。',
       shellnew_empty:'未发现带 ShellNew 的扩展名。',
       openwith_empty:'未发现注册在 Applications 下的应用。',
-      add:'新增项', readonly:'只读', sys:'系统',
+      add:'新增项', readonly:'只读', sys:'系统', unknown_type:'文件',
       add_title:'新增「发送到」项', add_target:'目标路径', add_name:'显示名称',
+      sendto_add_title:'新增「发送到」项', openwith_add_title:'新增「打开方式」应用',
+      shellnew_add_title:'新增「新建」项', add_ext:'扩展名', add_ext_ph:'如 .md（含点，会建空文件模板）',
       add_target_ph:'程序/文件夹/文档的完整路径', add_name_ph:'菜单里显示的名字',
-      need_target:'请填写目标路径', need_name:'请填写显示名称',
+      need_target:'请填写目标路径', need_name:'请填写显示名称', need_ext:'请填写扩展名（如 .md）',
       add_ok:'新增成功',
-      del_title:'删除「发送到」项', del_desc:'确定删除「{name}」？文件将送到回收站，可还原。',
-      del_ok:'已删除（送回收站）',
+      del_title:'删除此项', del_desc:'确定删除「{name}」？文件将送到回收站，可还原。',
+      del_desc_ow:'确定删除「{name}」？该应用项将移到 .deleted（可手动恢复），不影响系统关联。',
+      del_desc_sn:'确定删除「{name}」的新建项？仅移除用户层 ShellNew，系统内建类型不受影响。',
+      del_ok:'已删除',
+    },
+    search:{
+      placeholder:'搜索所有菜单项…', empty:'无匹配项', count:'{n} 个结果',
     },
     editor:{
       slogan:'可视化与列表双视图实时同步。点名称改名、点图标换图标，列表里批量勾选管理。所有改动只写当前用户注册表（HKCU），随时可逆。',
@@ -1399,19 +1482,28 @@ const i18n = {
       sendto_slogan:'右鍵「傳送到」子選單。項目存於 %APPDATA%\\Microsoft\\Windows\\SendTo，停用＝加 .disabled 副檔名，可逆。可新增指向任意程式/資料夾的項目。',
       dragdrop_slogan:'用滑鼠右鍵拖曳檔案放開時彈出的選單（複製到此處/移動到此處…）由這些拖放處理程式決定，分佈於資料夾/磁碟機等物件類。停用＝子鍵搬到 -DragDropHandlers，可逆。',
       shellnew_slogan:'右鍵「新增」子選單的項目。某副檔名下有 ShellNew 鍵，「新增」裡就出現該類型。停用＝ShellNew 鍵搬到 -ShellNew，寫入前自動備份，可逆。',
-      openwith_slogan:'右鍵「開啟方式」候選程式（登錄於 Applications）。此處僅唯讀列出，啟停牽涉系統檔案關聯、風險較高，暫不提供。',
+      openwith_slogan:'右鍵「開啟方式」候選程式（登錄於 Applications）。停用＝寫 NoOpenWith（程式從清單隱藏），可逆；可新增指向任意程式的項目（寫目前使用者）。系統項（HKLM）不可刪，使用者新增項可刪。',
       sendto_empty:'未發現「傳送到」項目。',
       dragdrop_empty:'未發現拖放處理程式。',
       shellnew_empty:'未發現帶 ShellNew 的副檔名。',
       openwith_empty:'未發現 Applications 下註冊的程式。',
-      add:'新增項目', readonly:'唯讀', sys:'系統',
+      add:'新增項目', readonly:'唯讀', sys:'系統', unknown_type:'未知類型',
       need_target:'目標路徑不能為空', need_name:'顯示名稱不能為空',
       add_title:'新增「傳送到」項目',
+      sendto_add_title:'新增「傳送到」項目', openwith_add_title:'新增「開啟方式」程式',
+      shellnew_add_title:'新增「新增」類型', add_ext:'副檔名', add_ext_ph:'如 .md（含點）',
+      del_desc_sn:'確定移除「{name}」的「新增」項？只移除目前使用者層，系統內建類型不受影響。',
       add_target:'目標路徑', add_target_ph:'如 D:\\工具\\xxx.exe',
       add_name:'顯示名稱', add_name_ph:'選單裡顯示的名字',
       add_ok:'新增成功',
       del_title:'刪除此項目', del_desc:'確定刪除「{name}」？檔案將送到資源回收筒，可還原。',
+      del_desc_ow:'確定刪除「{name}」？該項會搬到 <b>.deleted</b> 備份鍵，可手動還原（僅限使用者自訂項）。',
       del_ok:'已刪除（送資源回收筒）',
+    },
+    search:{
+      placeholder:'搜尋所有右鍵選單項…',
+      empty:'無相符項目',
+      count:'{n} 個相符',
     },
     editor:{
       slogan:'視覺化與清單雙檢視即時同步。點名稱改名、點圖示換圖示，清單裡批次勾選管理。所有變更只寫目前使用者登錄檔（HKCU），隨時可逆。',
@@ -1529,19 +1621,28 @@ const i18n = {
       sendto_slogan:'The right-click "Send to" submenu. Items are files under %APPDATA%\\\\Microsoft\\\\Windows\\\\SendTo — not the registry. Toggling appends/removes a ".disabled" suffix, fully reversible. You can add a target as a new shortcut.',
       dragdrop_slogan:'Drag-drop handlers: the menu (Copy here / Move here / Create shortcut…) shown when you right-drag a file onto a folder or drive. They are COM extensions grouped by object class; toggling moves the key to "-DragDropHandlers", reversible.',
       shellnew_slogan:'The "New" submenu. An extension with a ShellNew key shows up as "New <type>". Toggling moves the ShellNew key to "-ShellNew" (backed up first), reversible. Adding a new file type is not supported here.',
-      openwith_slogan:'Apps registered under Applications, candidates for "Open with". Read-only: "Open with" is a dynamic file association and toggling it risks breaking system associations, so no on/off here.',
+      openwith_slogan:'Apps registered under Applications, candidates for "Open with". Toggling writes/removes NoOpenWith (hides the app from the list), reversible. You can add an app (written to the current user); system (HKLM) items cannot be deleted, user-added ones can.',
       sendto_empty:'No Send-to items found.',
       dragdrop_empty:'No drag-drop handlers found.',
       shellnew_empty:'No New-menu items found.',
       openwith_empty:'No registered apps found.',
-      add:'Add item', readonly:'Read-only', sys:'System',
+      add:'Add item', readonly:'Read-only', sys:'System', unknown_type:'File',
+      sendto_add_title:'Add a Send-to item', openwith_add_title:'Add an Open-with app',
+      shellnew_add_title:'Add a "New" file type', add_ext:'Extension', add_ext_ph:'e.g. .md (with the dot)',
+      del_desc_sn:'Remove the "New" entry for <b>{name}</b>? Only the current-user layer is removed; built-in system types are unaffected.',
       add_title:'Add a Send-to item',
       add_target:'Target', add_target_ph:'Full path to an app / folder / file',
       add_name:'Display name', add_name_ph:'Name shown in the menu',
       need_target:'Target path is required', need_name:'Display name is required',
       add_ok:'Added', del_ok:'Deleted (sent to Recycle Bin)',
-      del_title:'Delete this Send-to item?',
+      del_title:'Delete this item?',
       del_desc:'Deleting <b>{name}</b> sends its file to the Recycle Bin — recoverable. Continue?',
+      del_desc_ow:'Delete <b>{name}</b>? The app entry moves to a ".deleted" mirror (recoverable). Continue?',
+    },
+    search:{
+      placeholder:'Search all menus…',
+      empty:'No matches',
+      count:'{n} results',
     },
     editor:{
       slogan:'Visual and list views stay in sync. Click a name to rename, click an icon to change it; batch-manage in the list. All changes go to the current-user registry (HKCU) and are fully reversible.',
@@ -1729,6 +1830,18 @@ const app = createApp({
       scene: 'desktop',
       sceneCounts: {},        // { sceneId: 项数 } —— tab 角标 / count badge per scene tab
 
+      // 全局搜索（标题栏跳转搜索器，非页面内筛选）。searchIndex 是所有场景项的扁平
+      // 缓存池，由 prefetchCounts 顺带填充（后台已 scan 各场景）；输入即在内存里匹配
+      // 名称/id/命令/CLSID，选中跳转到对应场景并高亮，不每次访问后端（同参考项目思路）。
+      // Global search: a title-bar jump searcher over an in-memory index of all
+      // scene items (built by prefetchCounts), matching name/id/command/clsid.
+      search: '',             // 搜索框输入
+      searchOpen: false,      // 结果下拉是否展开
+      searchIndex: [],        // [{scene, sceneKind, id, label, target, command, clsid, kind}]
+      searchIndexReady: false, // prefetchCounts 建完索引置 true
+      searchJumpId: null,     // 搜索跳转后待高亮定位的项 id
+      searchHilite: null,     // 跳转后高亮的项 id（短暂）
+
       // Win+X 场景（文件系统机制，非注册表）。分组数据由 scan_winx 拉，组已倒序。
       // Win+X scene state. Groups come from scan_winx (already reversed).
       winxGroups: [],
@@ -1819,8 +1932,26 @@ const app = createApp({
       };
       return map[this.scene] || null;
     },
-    // 当前特殊场景是否支持新增项（仅 sendto）。
-    spCanAdd() { return this.scene === 'sendto'; },
+    // 当前特殊场景是否支持新增项（sendto / openwith / shellnew）。
+    spCanAdd() { return this.scene === 'sendto' || this.scene === 'openwith' || this.scene === 'shellnew'; },
+
+    // 全局搜索结果：对内存索引 searchIndex 做多字段忽略大小写匹配，最多 40 条。
+    // 匹配 label / id / target / command / ext；空查询返回空。跨所有场景（含特殊菜单）。
+    // Global search: multi-field case-insensitive match over the in-memory index.
+    searchResults() {
+      const q = (this.search || '').trim().toLowerCase();
+      if (!q) return [];
+      const hit = (v) => v && String(v).toLowerCase().indexOf(q) !== -1;
+      const out = [];
+      for (const it of this.searchIndex) {
+        if (hit(it.label) || hit(it.id) || hit(it.target) ||
+            hit(it.command) || hit(it.ext)) {
+          out.push(it);
+          if (out.length >= 40) break;
+        }
+      }
+      return out;
+    },
     // 当前特殊场景是否支持启停（openwith 只读）。
     spCanToggle() { return this.scene !== 'openwith'; },
 
@@ -1973,6 +2104,7 @@ const app = createApp({
       this.showTheme = false;
       this.glyphPickFor = null;
       this.ctxMenu = { for: null };
+      this.searchOpen = false;
     },
 
     // —— 顶层点场景项 —— 场景已平铺到顶层导航（与 Win11/关于 平级）。点击先把
@@ -2139,10 +2271,10 @@ const app = createApp({
         } catch (e) { /* 静默 */ }
       }));
     },
-    async reloadSpecial() { await this.loadSpecial(this.spSceneId); },
+    async reloadSpecial() { await this.loadSpecial(this.scene); },
     // 特殊场景启停：调 set_<id>_enabled(itemId, next)，可逆即时。
     async spToggle(it) {
-      const id = this.spSceneId;
+      const id = this.scene;
       if (it.canToggle === false) return;  // openwith 只读，不启停
       const next = !it.enabled;
       const r = await this.callBackend('set_' + id + '_enabled', it.id, next);
@@ -2154,31 +2286,57 @@ const app = createApp({
       }
     },
     // SendTo 新增项弹层。
-    sendtoAddOpen() { this.sendtoAdd = { show:true, target:'', name:'' }; },
-    async sendtoAddCommit() {
+    // 新增项弹层（sendto / openwith 共用）。弹层字段 target + name。
+    spAddOpen() { this.sendtoAdd = { show:true, target:'', name:'' }; },
+    async spAddCommit() {
+      const scene = this.scene;
       const target = (this.sendtoAdd.target || '').trim();
       const name = (this.sendtoAdd.name || '').trim();
+      // shellnew 只需一个扩展名（填在 target 字段），必须以「.」开头。
+      if (scene === 'shellnew') {
+        let ext = target;
+        if (!ext) { this.showToast(this.t('sp.need_ext'), 'err'); return; }
+        if (ext[0] !== '.') ext = '.' + ext;   // 容错：用户漏打点自动补
+        const r = await this.callBackend('add_shellnew_item', ext);
+        if (r && r.ok) {
+          this.sendtoAdd.show = false;
+          this.showToast(this.t('sp.add_ok'), 'ok');
+          await this.loadSpecial(scene);
+        } else {
+          this.showToast(this.t('toast.'+ (r?.key || 'sp_failed')), 'err');
+        }
+        return;
+      }
       if (!target) { this.showToast(this.t('sp.need_target'), 'err'); return; }
-      if (!name) { this.showToast(this.t('sp.need_name'), 'err'); return; }
-      const r = await this.callBackend('add_sendto_item', target, name);
+      // openwith 的 name 可空（后端用 exe 名兜底）；sendto 要求填名。
+      if (!name && scene === 'sendto') { this.showToast(this.t('sp.need_name'), 'err'); return; }
+      const bindName = scene === 'openwith' ? 'add_openwith_item' : 'add_sendto_item';
+      const r = await this.callBackend(bindName, target, name);
       if (r && r.ok) {
         this.sendtoAdd.show = false;
         this.showToast(this.t('sp.add_ok'), 'ok');
-        await this.loadSpecial('sendto');
+        await this.loadSpecial(scene);
       } else {
         this.showToast(this.t('toast.'+ (r?.key || 'sp_failed')), 'err');
       }
     },
-    // SendTo 删除项（送回收站，二次确认）。
-    sendtoDel(it) {
+    // 删除项（二次确认）。sendto 送回收站；openwith 软删（搬到 <app>.deleted）。
+    spDel(it) {
+      const scene = this.scene;
+      const bindName = scene === 'openwith' ? 'del_openwith_item'
+                     : scene === 'shellnew' ? 'del_shellnew_item'
+                     : 'del_sendto_item';
+      const descKey = scene === 'openwith' ? 'sp.del_desc_ow'
+                    : scene === 'shellnew' ? 'sp.del_desc_sn'
+                    : 'sp.del_desc';
       this.askConfirm(
         this.t('sp.del_title'),
-        this.t('sp.del_desc', { name: this.escapeHtml(it.label || it.id) }),
+        this.t(descKey, { name: this.escapeHtml(it.label || it.id) }),
         async () => {
-          const r = await this.callBackend('del_sendto_item', it.id);
+          const r = await this.callBackend(bindName, it.id);
           if (r && r.ok) {
             this.showToast(this.t('sp.del_ok'), 'ok');
-            await this.loadSpecial('sendto');
+            await this.loadSpecial(scene);
           } else {
             this.showToast(this.t('toast.'+ (r?.key || 'sp_failed')), 'err');
           }
@@ -2298,12 +2456,108 @@ const app = createApp({
     // 6 场景项数预取，给 tab 角标。仅在 web bind 可用时执行。
     async prefetchCounts() {
       if (!window.scan_scene) return;
+      // 顺便把每个注册表场景的全量项缓存进 searchIndex（供全局搜索用），一次扫描两用。
+      // Cache full items per scene into searchIndex while counting (search reuses this).
+      const index = [];
       for (const sc of this.scenes) {
-        if (sc.id === this.scene) continue;
         try {
           const arr = await window.scan_scene(sc.id);
-          this.sceneCounts[sc.id] = Array.isArray(arr) ? arr.length : 0;
+          const list = Array.isArray(arr) ? arr : [];
+          this.sceneCounts[sc.id] = list.length;
+          for (const it of list) {
+            index.push({ scene: sc.id, id: it.id, label: it.label || '',
+              target: it.command || '', command: it.command || '',
+              clsid: it.clsid || '', kind: it.kind || '' });
+          }
         } catch (e) { /* 忽略 */ }
+      }
+      // 特殊菜单场景（sendto/dragdrop/shellnew/openwith）也纳入搜索索引。
+      for (const sc of this.specialScenes) {
+        const fnName = 'scan_' + sc.id;
+        if (!window[fnName]) continue;
+        try {
+          const arr = await window[fnName]();
+          const list = Array.isArray(arr) ? arr : [];
+          this.sceneCounts[sc.id] = list.length;
+          for (const it of list) {
+            index.push({ scene: sc.id, id: it.id,
+              label: it.friendlyName || it.label || it.ext || it.id || '',
+              target: it.target || '', command: it.command || '',
+              clsid: it.clsid || '', kind: it.kind || '' });
+          }
+        } catch (e) { /* 忽略 */ }
+      }
+      this.searchIndex = index;
+      this.searchIndexReady = true;
+    },
+
+    // —— 全局搜索 —— 基于 searchIndex 内存匹配（不访问后端）。忽略标点/大小写。
+    // Global search over the in-memory index (no backend hit). Punctuation-insensitive.
+    normalizeSearch(s) {
+      return (s || '').toLowerCase().replace(/[\s\-_.&()（）［］\[\]]+/g, '');
+    },
+    closeSearch() { this.searchOpen = false; },
+    // 回车：直接跳到第一条结果（若有）。
+    searchEnter() {
+      if (this.searchResults.length) this.gotoSearchResult(this.searchResults[0]);
+    },
+    // 点击结果：切到对应场景 + 高亮定位该项。特殊场景/注册表场景分别路由。
+    gotoSearchResult(r) {
+      this.searchOpen = false;
+      this.search = '';
+      this.searchJumpId = r.id;   // 目标场景加载后据此高亮
+      this.selectScene(r.scene);
+      // 3 秒后清除高亮标记。
+      setTimeout(() => { if (this.searchJumpId === r.id) this.searchJumpId = null; }, 3200);
+    },
+    // 场景 id → 本地化显示名（搜索结果里标来源场景）。
+    sceneDisplayName(id) { return this.t('scene.' + id); },
+    // 把 label 里命中搜索词的片段高亮（忽略标点匹配，故按原串找子串近似高亮）。
+    highlightMatch(label) {
+      const q = (this.search || '').trim();
+      if (!q) return this.escapeHtml(label || '');
+      const raw = label || '';
+      const idx = raw.toLowerCase().indexOf(q.toLowerCase());
+      if (idx < 0) return this.escapeHtml(raw);
+      return this.escapeHtml(raw.slice(0, idx)) +
+        '<mark class="s-hl">' + this.escapeHtml(raw.slice(idx, idx + q.length)) + '</mark>' +
+        this.escapeHtml(raw.slice(idx + q.length));
+    },
+    searchEnter() {
+      if (this.searchResults.length) this.gotoSearchResult(this.searchResults[0]);
+    },
+    // 高亮匹配片段（HTML 转义后包 <mark>）。
+    highlightMatch(label) {
+      const raw = String(label || '');
+      const q = (this.search || '').trim();
+      if (!q) return this.escapeHtml(raw);
+      const idx = raw.toLowerCase().indexOf(q.toLowerCase());
+      if (idx < 0) return this.escapeHtml(raw);
+      return this.escapeHtml(raw.slice(0, idx))
+        + '<mark>' + this.escapeHtml(raw.slice(idx, idx + q.length)) + '</mark>'
+        + this.escapeHtml(raw.slice(idx + q.length));
+    },
+    // 场景 id -> 本地化名（含注册表场景 + 特殊场景 + winx）。
+    sceneDisplayName(id) {
+      return this.t('scene.' + id);
+    },
+    // 点击搜索结果：跳到对应场景并高亮该项。
+    gotoSearchResult(r) {
+      this.searchOpen = false;
+      this.search = '';
+      this._searchJumpTo = { scene: r.scene, id: r.id };
+      this.selectScene(r.scene);
+      // 跳转后滚动到该项并短暂高亮（等场景数据加载）。
+      this.$nextTick(() => {
+        setTimeout(() => this.flashSearchItem(r.id), 300);
+      });
+    },
+    flashSearchItem(id) {
+      const el = document.querySelector('[data-item-id="' + (CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+      if (el) {
+        el.scrollIntoView({ block:'center', behavior:'smooth' });
+        el.classList.add('search-flash');
+        setTimeout(() => el.classList.remove('search-flash'), 1600);
       }
     },
 
@@ -2356,6 +2610,26 @@ const app = createApp({
         if (e) return e[lang] || e.en;
       }
       return null;
+    },
+    // 特殊菜单场景（sendto/dragdrop/shellnew/openwith）项显示名，各自兜底：
+    //  - shellnew：后端给 friendlyName（系统本地化关联名，可空）+ ext，前端拼「友好名 (.ext)」；
+    //    无友好名时用 i18n「未知类型」+ ext，绝不在后端拼中文（踩坑 8）。
+    //  - dragdrop：项带 kind='handler'，走 BUILTIN_NAMES.handler 本地化兜底（同经典 handler）。
+    //  - 其余（sendto/openwith）：label 已是文件名/应用名，直接用。
+    spLabel(it) {
+      if (this.scene === 'shellnew') {
+        const ext = it.ext || '';
+        const fn = (it.friendlyName || '').trim();
+        if (fn) return fn + ' (' + ext + ')';
+        return this.t('sp.unknown_type') + ' (' + ext + ')';
+      }
+      if (this.scene === 'dragdrop') {
+        const key = (it.label || '').toLowerCase();
+        const e = BUILTIN_NAMES.handler[key];
+        if (e) return e[this.lang] || e.en;
+        return it.label || it.id;
+      }
+      return it.label || it.id;
     },
     // 显示名：handler 项的 id 是 "handler:xxx"，label 是注册表键名（一般是 CLSID 或 DLL 名）。
     // 对 handler，去 "handler:" 前缀并截短显示。Win11 视图与列表视图都剥掉助记符。

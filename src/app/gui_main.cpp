@@ -549,6 +549,22 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                 w.resolve(seq, 0, cmm::set_shellnew_enabled(id, enabled));
             }).detach();
         }, nullptr);
+    // ShellNew 新增：参数 [".ext","显示名"]，在 HKCU\.ext\ShellNew 写 NullFile。
+    w.bind("add_shellnew_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string ext = parse_string_arg_at(req, 0);
+            std::thread([&w, seq, ext]() {
+                w.resolve(seq, 0, cmm::add_shellnew_item(ext));
+            }).detach();
+        }, nullptr);
+    // ShellNew 删除：参数 [".ext"]，仅删 HKCU 用户新增项（HKLM 系统项拒绝）。
+    w.bind("del_shellnew_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id = parse_string_arg_at(req, 0);
+            std::thread([&w, seq, id]() {
+                w.resolve(seq, 0, cmm::del_shellnew_item(id));
+            }).detach();
+        }, nullptr);
 
     // —— OpenWith：打开方式应用列表（只读枚举 Applications，无启停）——
     w.bind("scan_openwith", [](const std::string&) -> std::string {
