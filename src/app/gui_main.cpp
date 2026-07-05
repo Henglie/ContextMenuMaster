@@ -575,7 +575,7 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     w.bind("set_openwith_enabled",
         [&w](const std::string& seq, const std::string& req, void*) {
             std::string id = parse_string_arg_at(req, 0);
-            bool enabled = (parse_string_arg_at(req, 1) == "true");
+            bool enabled = parse_bool_arg(req);
             std::thread([&w, seq, id, enabled]() {
                 w.resolve(seq, 0, cmm::set_openwith_enabled(id, enabled));
             }).detach();
@@ -608,11 +608,18 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         [&w](const std::string& seq, const std::string& req, void*) {
             std::string clsid = parse_string_arg_at(req, 0);
             std::string disp = parse_string_arg_at(req, 1);
-            bool enabled = (parse_string_arg_at(req, 2) == "true");
+            bool enabled = parse_bool_arg(req);
             std::thread([&w, seq, clsid, disp, enabled]() {
                 w.resolve(seq, 0, cmm::set_win11menu_enabled(clsid, disp, enabled));
             }).detach();
         }, nullptr);
+
+    // —— 重启资源管理器 —— Win11 黑名单/其它菜单改动后调用使其瞬间生效。
+    //  投递分离子进程杀+重拉 explorer，本调用立即返回（见 context_menu.cpp）。
+    w.bind("restart_explorer", [](const std::string&) -> std::string {
+        bool ok = cmm::restart_explorer();
+        return ok ? "{\"ok\":true}" : "{\"ok\":false,\"key\":\"restart_failed\"}";
+    });
 
     // —— 绑定：用默认浏览器打开外链 —— 参数 ["https://..."]
     // 只放行 https:// 开头的网址（白名单 schema），杜绝 file:// / 任意命令注入。

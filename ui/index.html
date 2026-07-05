@@ -710,6 +710,12 @@
   <aside class="side glass">
     <div class="brand">{{ t('brand.zh') }}<span class="en">{{ t('brand.en') }}</span></div>
     <nav class="nav">
+      <!-- Win11 专区置顶（用户最看重）：现代菜单管理独立入口 -->
+      <!-- Win11 zone pinned to top: modern-menu management entry -->
+      <div class="nav-item" :class="{on: tab==='win11'}" @click="tab='win11'">
+        <span class="ic">⊞</span>{{ t('nav.win11') }}
+      </div>
+      <div class="nav-sep"></div>
       <!-- 场景（右键菜单各来源）直接平铺到顶层，与 Win11/关于 平级 -->
       <!-- Scenes flattened to top level, peer to Win11 zone / About -->
       <div v-for="sc in scenes" :key="sc.id" class="nav-item"
@@ -1380,6 +1386,7 @@ const i18n = {
       folder_bg:'文件夹空白', drive:'驱动器', recycle:'回收站',
       allfsobjects:'所有文件对象', computer:'此电脑', library:'库',
       winx:'Win+X 菜单', winx_todo:'Win+X 菜单管理开发中',
+      sendto:'发送到', shellnew:'新建', dragdrop:'拖放处理', openwith:'打开方式',
     },
     winx:{
       slogan:'Win+X 菜单（按 Win+X 或右键开始按钮弹出）。项按分组排列，Group3 在最上。启停 = 改快捷方式扩展名，随时可逆；新增项会自动写入 explorer 认可的 hash 后显示。',
@@ -1467,6 +1474,7 @@ const i18n = {
       grp_packaged:'第三方扩展（可启停）', grp_system:'系统内置命令（只读）',
       empty_packaged:'未发现第三方现代菜单扩展', empty_system:'无可展示的系统命令',
       list_warn:'启停通过写入 Shell Extensions 黑名单实现，改动后需重启资源管理器（explorer.exe）生效。系统内置命令只读，误封锁可能导致现代菜单整体回退到经典菜单。',
+      applied:'已切换，正在重启资源管理器使其生效…',
     },
     about:{
       body:'在 Windows 11 上重新主理你的鼠标右键菜单。可视化编辑、批量管理、一键找回经典菜单。<br>纯本地运行，只改当前用户注册表，随时可逆。',
@@ -1516,6 +1524,7 @@ const i18n = {
       folder_bg:'資料夾空白', drive:'磁碟機', recycle:'資源回收筒',
       allfsobjects:'所有檔案物件', computer:'本機', library:'媒體櫃',
       winx:'Win+X 選單', winx_todo:'Win+X 選單管理開發中',
+      sendto:'傳送到', shellnew:'新增', dragdrop:'拖放處理', openwith:'開啟方式',
     },
     winx:{
       slogan:'Win+X 選單（按 Win+X 或右鍵開始鈕彈出）。項目存於檔案系統（%LOCALAPPDATA%\\...\\WinX），非登錄檔；停用＝改副檔名為 .lnk.disabled，可逆。分組由下而上排（Group3 在選單最上）。',
@@ -1607,6 +1616,7 @@ const i18n = {
       grp_packaged:'第三方擴充（可啟停）', grp_system:'系統命令（唯讀）',
       empty_packaged:'未偵測到第三方 Win11 選單擴充', empty_system:'無系統現代選單項',
       list_warn:'啟停後需重啟資源管理器（或登出重登）方能生效。系統命令唯讀：誤封鎖可能導致整個現代選單回退為經典選單。',
+      applied:'已切換，正在重啟資源管理器使其生效…',
     },
     about:{
       body:'在 Windows 11 上重新主理你的滑鼠右鍵選單。視覺化編輯、批次管理、一鍵找回經典選單。<br>純本機執行，只改目前使用者登錄檔，隨時可逆。',
@@ -1657,6 +1667,7 @@ const i18n = {
       folder_bg:'Folder bg', drive:'Drive', recycle:'Recycle Bin',
       allfsobjects:'All file objects', computer:'This PC', library:'Library',
       winx:'Win+X Menu', winx_todo:'Win+X menu management coming soon',
+      sendto:'Send To', shellnew:'New', dragdrop:'Drag & Drop', openwith:'Open With',
     },
     winx:{
       slogan:'Win+X menu (the power-user menu on right-click Start / Win+X). Items live in the file system, not the registry: toggling renames .lnk / .lnk.disabled, fully reversible. Groups are shown top-down (Group3 first).',
@@ -1750,6 +1761,7 @@ const i18n = {
       grp_packaged:'Third-party extensions (toggleable)', grp_system:'System commands (read-only)',
       empty_packaged:'No third-party Win11 menu extensions detected', empty_system:'No system modern-menu items',
       list_warn:'Toggling takes effect after restarting Explorer (or signing out and back in). System commands are read-only: blocking the wrong one may make the entire modern menu fall back to the classic menu.',
+      applied:'Toggled. Restarting Explorer to apply…',
     },
     about:{
       body:'Take charge of your right-click menu on Windows 11. Visual editing, batch management, one-click classic-menu restore.<br>Runs fully local, touches only the current-user registry, fully reversible.',
@@ -1864,7 +1876,7 @@ const app = createApp({
       // 顶层「页面」项（Win11 专区 / 关于）—— 场景不在此，场景已平铺到顶层单列。
       // Top-level page items (peer to the flattened scene list above them).
       pageItems: [
-        { key:'win11',  ic:'⊞' },
+        // Win11 专区已置顶单独渲染，此处只留关于。/ Win11 zone pinned above; only About here.
         { key:'about',  ic:'◔' },
       ],
 
@@ -2986,7 +2998,9 @@ const app = createApp({
         it.enabled = next;
         it.blockedMachine = !next;
         it.blockedUser = !next;
-        this.showToast(this.t('win11.warn'), 'ok');   // 提醒重启资源管理器
+        // Blocked list 变更后 explorer 有缓存，须重启资源管理器才生效（同经典菜单接管）。
+        if (window.restart_explorer) { try { await window.restart_explorer(); } catch (e) {} }
+        this.showToast(this.t('win11.applied'), 'ok');
       } else {
         this.showToast(this.t('toast.'+ (r?.key || 'sp_failed')), 'err');
       }
