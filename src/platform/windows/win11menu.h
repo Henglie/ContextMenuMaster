@@ -32,6 +32,8 @@ struct Win11MenuItem {
     std::string id;           // 稳定标识："packaged|{clsid}" 或 "system|Windows.Xxx"
     std::string source;       // "packaged" / "system"
     std::string clsid;        // handler CLSID（"{...}" 大括号小写；system 项为其 handler guid，可空）
+                              // 归并项含多个 CLSID 时以 ';' 分隔（同包同名的多 handler 合并为一项，
+                              // 启停时该组所有 CLSID 一起写/删黑名单）
     std::string commandKey;   // system 项的 CommandStore 键名（如 "Windows.Share"；packaged 空）
     std::string label;        // 显示名（ComServer DisplayName / MUIVerb 解析 / 包名兜底）
     std::string iconSource;   // 图标源（handler exe 路径 / Icon 值；交 icon_extract 提取，可空）

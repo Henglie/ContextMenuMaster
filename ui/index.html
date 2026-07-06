@@ -937,19 +937,16 @@
                   <template v-for="(it, idx) in spItems" :key="it.id">
                     <div v-if="scene==='dragdrop' && (idx===0 || spItems[idx-1].objectClass !== it.objectClass)"
                          class="spv-group">{{ it.objectClass }}</div>
-                    <div class="spv-row" :class="{disabled: !it.enabled}">
+                    <div class="spv-row" :class="{disabled: !it.enabled}"
+                         @contextmenu.prevent.stop="openSpCtx(it, $event)"
+                         :title="t('sp.right_click_hint')">
                       <span class="g">
                         <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
                         <span v-else>▸</span>
                       </span>
                       <span class="nm">{{ spLabel(it) }}<span v-if="it.system" class="sys">{{ t('sp.sys') }}</span></span>
                       <span v-if="it.canToggle === false" class="ro">{{ t('sp.readonly') }}</span>
-                      <span v-else class="sw">
-                        <span class="switch" :class="{on: it.enabled}" @click="spToggle(it)"><span class="knob"></span></span>
-                      </span>
-                      <button v-if="scene==='sendto' || (scene==='openwith' && !it.system) || (scene==='shellnew' && !it.system)"
-                              class="del" @click="spDel(it)" :disabled="busy" :title="t('winx.del')">⌫</button>
-                      <span v-else class="del" style="visibility:hidden;">⌫</span>
+                      <span v-else-if="!it.enabled" class="ro">{{ t('editor.item_disabled') }}</span>
                     </div>
                   </template>
                 </div>
@@ -1122,8 +1119,7 @@
                           v-html="renderClassicLabel(it)"></span>
                     <span class="right">
                       <span v-if="it.system" class="sys-mark" :title="t('editor.system_item')">SYS</span>
-                      <span v-if="it.canToggle" class="switch sm" :class="{on: it.enabled}"
-                            @click.stop="askToggle(it)" :title="t('list.enabled')"><span class="knob"></span></span>
+                      <span v-if="!it.enabled" class="rc-ic" :title="t('sp.readonly')">⊘</span>
                       <span class="sub-arrow">▶</span>
                     </span>
                   </div>
@@ -1155,13 +1151,7 @@
                         v-html="renderClassicLabel(it)"></span>
                   <span class="right">
                     <span v-if="it.system" class="sys-mark" :title="t('editor.system_item')">SYS</span>
-                    <!-- 行内启停开关：可切换项直接在可视化菜单上开关，无需右键 -->
-                    <span v-if="it.canToggle" class="switch sm" :class="{on: it.enabled}"
-                          @click.stop="askToggle(it)" :title="t('list.enabled')"><span class="knob"></span></span>
-                    <!-- 自建项行内删除（hover 显示） -->
-                    <button v-if="it.custom" class="ctx-row-del" @click.stop="customDel(it)"
-                            :disabled="busy" :title="t('custom.del')">⌫</button>
-                    <span v-if="it.kind==='handler' && !it.canToggle">▶</span>
+                    <span v-if="!it.enabled" class="rc-ic" :title="t('editor.item_disabled')">⊘</span>
                   </span>
                 </div>
               </template>
@@ -1283,6 +1273,19 @@
         <!-- 现代菜单可视化编辑：仿真 Win11 右键现代菜单外观。列出全部 PackagedCom 扩展项，
              每行内联启停开关（停用项灰显但仍在菜单里可见，直观反映黑名单状态）。系统项只读。
              启停即写黑名单双写并自动重启 explorer（同下方逻辑）。 -->
+        <!-- 视图切换：可视化 / 列表 -->
+        <div class="toolbar" style="margin-top:4px;">
+          <div class="view-seg">
+            <button :class="{on: win11View==='visual'}" @click="win11View='visual'">{{ t('editor.view_visual') }}</button>
+            <button :class="{on: win11View==='list'}" @click="win11View='list'">{{ t('editor.view_list') }}</button>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn sm" @click="loadWin11(true)" :disabled="win11Loading">
+            <span class="ic">↻</span>{{ t('win11.refresh') }}
+          </button>
+        </div>
+
+        <div v-show="win11View==='visual'">
         <div class="cat-title">{{ t('win11.preview_section') }}</div>
         <div class="card glass" style="display:flex; flex-direction:column; align-items:center; gap:10px;">
           <div class="card-desc" style="margin:0; align-self:flex-start;">{{ t('win11.preview_hint') }}</div>
@@ -1305,15 +1308,15 @@
             <template v-if="win11Grouped.packaged.length">
               <div class="ctx-sep"></div>
               <div v-for="it in win11Grouped.packaged" :key="it.id"
-                   class="ctx-row" :class="{disabled: !it.enabled}">
+                   class="ctx-row" :class="{disabled: !it.enabled}"
+                   @contextmenu.prevent.stop="openWin11Ctx(it, $event)"
+                   :title="t('win11.right_click_hint')">
                 <span class="glyph">
                   <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
                   <span v-else>◆</span>
                 </span>
                 <span class="label">{{ it.label }}</span>
-                <span class="right">
-                  <span class="switch sm" :class="{on: it.enabled}" @click.stop="win11Toggle(it)"><span class="knob"></span></span>
-                </span>
+                <span class="right"><span v-if="!it.enabled" class="rc-ic" :title="t('sp.readonly')">⊘</span></span>
               </div>
             </template>
             <!-- 系统项（只读）：列在菜单里但不可切换 -->
@@ -1338,6 +1341,9 @@
           <div v-if="!win11Loading && !win11Grouped.packaged.length && !win11Grouped.system.length" class="card-desc" style="margin:0;">{{ t('win11.preview_empty') }}</div>
         </div>
 
+        </div><!-- /visual -->
+
+        <div v-show="win11View==='list'">
         <div class="cat-title">{{ t('win11.sparse_section') }}</div>
 
         <div class="toolbar">
@@ -1394,6 +1400,7 @@
 
           <div class="card-desc" style="margin:16px 0 0; color:var(--warn);">{{ t('win11.list_warn') }}</div>
         </template>
+        </div><!-- /list -->
       </div>
 
       <!-- ============ 关于 / About ============ -->
@@ -1438,22 +1445,46 @@
     </div>
   </div>
 
-  <!-- 可视化视图行右键操作菜单（改名 / 换图标 / 启停）/ Right-click action menu for visual rows -->
-  <div v-if="ctxMenu.for" class="row-ctx glass" :style="ctxMenuStyle" @click.stop>
-    <div class="rc-item" :class="{dis: !ctxMenu.for.canRename}"
-         @click="ctxMenu.for.canRename && ctxAction('rename')">
-      <span class="rc-ic">✎</span>{{ t('list.rename') }}
-    </div>
-    <div class="rc-item" :class="{dis: !ctxMenu.for.canChangeIcon}"
-         @click="ctxMenu.for.canChangeIcon && ctxAction('icon')">
-      <span class="rc-ic">◆</span>{{ t('list.icon_btn') }}
-    </div>
-    <div class="rc-sep"></div>
-    <div class="rc-item" :class="{dis: !ctxMenu.for.canToggle}"
-         @click="ctxMenu.for.canToggle && ctxAction('toggle')">
-      <span class="rc-ic">{{ ctxMenu.for.enabled ? '⊘' : '✓' }}</span>{{ ctxMenu.for.enabled ? t('ctxmenu.disable') : t('ctxmenu.enable') }}
-    </div>
-  </div>
+      <!-- 行右键操作菜单——按 kind 分支：经典(改名/换图标/启停/删自建) / win11(仅启停) / sp(启停+删) -->
+      <div v-if="ctxMenu.for" class="row-ctx glass" :style="ctxMenuStyle" @click.stop>
+        <!-- Win11 现代菜单项：系统管控，只启停 -->
+        <template v-if="ctxMenu.kind === 'win11'">
+          <div class="rc-item" @click="ctxAction('toggle')">
+            <span class="rc-ic">{{ ctxMenu.for.enabled ? '⊘' : '✓' }}</span>{{ ctxMenu.for.enabled ? t('ctxmenu.disable') : t('ctxmenu.enable') }}
+          </div>
+        </template>
+        <!-- 特殊菜单项：启停 + 删除（可删项）；只读项显示只读 -->
+        <template v-else-if="ctxMenu.kind === 'sp'">
+          <div v-if="ctxMenu.for.canToggle !== false" class="rc-item" @click="ctxAction('toggle')">
+            <span class="rc-ic">{{ ctxMenu.for.enabled ? '⊘' : '✓' }}</span>{{ ctxMenu.for.enabled ? t('ctxmenu.disable') : t('ctxmenu.enable') }}
+          </div>
+          <div v-if="spCtxCanDel(ctxMenu.for)" class="rc-item danger" @click="ctxAction('spdel')">
+            <span class="rc-ic">⌫</span>{{ t('winx.del') }}
+          </div>
+          <div v-if="ctxMenu.for.canToggle === false && !spCtxCanDel(ctxMenu.for)" class="rc-item dis">
+            <span class="rc-ic">🔒</span>{{ t('sp.readonly') }}
+          </div>
+        </template>
+        <!-- 经典场景项：改名 / 换图标 / 启停 / 删除(仅自建 cmm_ 项) -->
+        <template v-else>
+          <div class="rc-item" :class="{dis: !ctxMenu.for.canRename}"
+               @click="ctxMenu.for.canRename && ctxAction('rename')">
+            <span class="rc-ic">✎</span>{{ t('list.rename') }}
+          </div>
+          <div class="rc-item" :class="{dis: !ctxMenu.for.canChangeIcon}"
+               @click="ctxMenu.for.canChangeIcon && ctxAction('icon')">
+            <span class="rc-ic">◆</span>{{ t('list.icon_btn') }}
+          </div>
+          <div class="rc-sep"></div>
+          <div class="rc-item" :class="{dis: !ctxMenu.for.canToggle}"
+               @click="ctxMenu.for.canToggle && ctxAction('toggle')">
+            <span class="rc-ic">{{ ctxMenu.for.enabled ? '⊘' : '✓' }}</span>{{ ctxMenu.for.enabled ? t('ctxmenu.disable') : t('ctxmenu.enable') }}
+          </div>
+          <div v-if="ctxMenu.for.custom" class="rc-item danger" @click="ctxAction('delete')">
+            <span class="rc-ic">⌫</span>{{ t('custom.del') }}
+          </div>
+        </template>
+      </div>
 
   <!-- Win+X 新增项弹层 / Win+X add-item modal -->
   <div v-if="winxAdd.show" class="modal-mask" @click.self="winxAdd.show=false">
@@ -1631,6 +1662,7 @@ const i18n = {
       empty_packaged:'未发现第三方现代菜单扩展', empty_system:'无可展示的系统命令',
       list_warn:'启停通过写入 Shell Extensions 黑名单实现，改动后需重启资源管理器（explorer.exe）生效。系统内置命令只读，误封锁可能导致现代菜单整体回退到经典菜单。',
       applied:'已切换，正在重启资源管理器使其生效…',
+      right_click_hint:'右键此项进行启停',
       preview_section:'菜单预览', preview_hint:'下面是启用的现代菜单扩展在 Win11 右键菜单里的大致样子（只读示意，启停在下方列表操作）。',
       preview_empty:'当前没有启用的第三方现代菜单项。', demo_open:'打开',
     },
@@ -1789,6 +1821,7 @@ const i18n = {
       empty_packaged:'未偵測到第三方 Win11 選單擴充', empty_system:'無系統現代選單項',
       list_warn:'啟停後需重啟資源管理器（或登出重登）方能生效。系統命令唯讀：誤封鎖可能導致整個現代選單回退為經典選單。',
       applied:'已切換，正在重啟資源管理器使其生效…',
+      right_click_hint:'右鍵此項進行啟停',
       preview_section:'現代選單預覽', preview_hint:'下方是啟用中的擴充項在 Win11 現代右鍵選單裡的大致長相（唯讀示意，啟停請在下方清單操作）。',
       preview_empty:'目前沒有啟用的第三方擴充項，現代選單只有系統內建項。', demo_open:'開啟',
     },
@@ -1950,6 +1983,7 @@ const i18n = {
       empty_packaged:'No third-party Win11 menu extensions detected', empty_system:'No system modern-menu items',
       list_warn:'Toggling takes effect after restarting Explorer (or signing out and back in). System commands are read-only: blocking the wrong one may make the entire modern menu fall back to the classic menu.',
       applied:'Toggled. Restarting Explorer to apply…',
+      right_click_hint:'Right-click to enable/disable',
       preview_section:'Modern menu preview', preview_hint:'A mockup of the Win11 right-click modern menu. Shows enabled third-party extensions (read-only — toggle them in the list below).',
       preview_empty:'No enabled third-party extensions yet — the preview shows only the system built-in items.', demo_open:'Open',
     },
@@ -3149,9 +3183,12 @@ const app = createApp({
     ctxAction(kind) {
       const it = this.ctxMenu.for;
       if (!it) return;
+      const isWin11 = this.ctxMenu.kind === 'win11';
       this.ctxMenu = { for: null };
       if (kind === 'rename') this.startRename(it, 'classic');
-      else if (kind === 'toggle') this.askToggle(it);
+      else if (kind === 'toggle') { if (isWin11) this.win11Toggle(it); else this.askToggle(it); }
+      else if (kind === 'delete') { if (it.custom) this.customDel(it); }
+      else if (kind === 'spdel') this.spDel(it);
       else if (kind === 'icon') {
         // 图标浮层需要一个锚点元素定位；右键来的没有 currentTarget，
         // 直接在右键落点附近弹出。
@@ -3304,6 +3341,33 @@ const app = createApp({
       } else {
         this.showToast(this.t('toast.'+ (r?.key || 'sp_failed')), 'err');
       }
+    },
+    // Win11 可视化项右键菜单：现代菜单项只支持启停（系统管控，无改名/换图标/删除）。
+    // 复用通用 ctxMenu overlay，标记 kind='win11'，ctxAction 据此走 win11Toggle。
+    openWin11Ctx(it, ev) {
+      ev.preventDefault();
+      this.closePopovers();
+      this.ctxMenu = { for: it, kind: 'win11' };
+      const w = 150, h = 60;
+      const left = Math.min(ev.clientX, window.innerWidth - w - 8);
+      const top = Math.min(ev.clientY, window.innerHeight - h - 8);
+      this.ctxMenuStyle = { left: left + 'px', top: top + 'px' };
+    },
+    // 特殊菜单飞出项右键菜单：启停 + 删除（sendto/openwith/shellnew 自建项）。
+    openSpCtx(it, ev) {
+      ev.preventDefault();
+      this.closePopovers();
+      this.ctxMenu = { for: it, kind: 'sp' };
+      const w = 150, h = 80;
+      const left = Math.min(ev.clientX, window.innerWidth - w - 8);
+      const top = Math.min(ev.clientY, window.innerHeight - h - 8);
+      this.ctxMenuStyle = { left: left + 'px', top: top + 'px' };
+    },
+    // 特殊菜单项能否删除：sendto 全可；openwith/shellnew 仅非系统项。
+    spCtxCanDel(it) {
+      return this.scene === 'sendto'
+        || (this.scene === 'openwith' && !it.system)
+        || (this.scene === 'shellnew' && !it.system);
     },
     doToggle() { return this.runMenuOp(window.toggle_classic_menu); },
     doEnable() { return this.runMenuOp(window.enable_classic_menu); },

@@ -110,6 +110,29 @@ std::wstring resolve_indirect(const std::wstring& spec) {
     return spec;
 }
 
+// 从包全名取友好名。包全名形如 "Microsoft.OneDriveSync_25206.._neutral_.."：
+//   取首段（首个 '_' 前）"Microsoft.OneDriveSync"，再取最后一个 '.' 后的词 "OneDriveSync"。
+// label 是通用词/为空时兜底，比 "Context Menu Items" 或整个包全名可读。
+std::wstring friendly_pkg_name(const std::wstring& pkgFullName) {
+    std::wstring head = pkgFullName;
+    size_t us = head.find(L'_');
+    if (us != std::wstring::npos) head = head.substr(0, us);   // 去版本/架构后缀
+    size_t dot = head.rfind(L'.');
+    if (dot != std::wstring::npos && dot + 1 < head.size()) head = head.substr(dot + 1);
+    return head.empty() ? pkgFullName : head;
+}
+
+// 判断 label 是否「通用/无信息」——这类回退到友好包名。OneDrive 的多个 handler
+// DisplayName 全填成 "Context Menu Items"，直接显示会刷屏，故归入通用词。
+bool is_generic_label(const std::wstring& label) {
+    if (label.empty()) return true;
+    std::wstring low = label;
+    std::transform(low.begin(), low.end(), low.begin(), ::towlower);
+    return low == L"context menu items"
+        || low == L"context menu verb handler"
+        || low == L"context menu handler";
+}
+
 // 一个包的 COM 服务信息与上下文声明，解析交集后得 handler 项。
 struct ComServerInfo {
     std::wstring path;         // 拼好的绝对路径（安装目录 + Class Path / server Executable）
@@ -363,7 +386,13 @@ std::vector<Win11MenuItem> scan_win11menu() {
         ManifestResult mr;
         if (!parse_manifest(manifest, installPath, &mr)) continue;
 
+        // 友好包名（label 通用/为空时兜底，如 OneDrive 的 21 个 "Context Menu Items"）。
+        std::wstring pkgFriendly = friendly_pkg_name(pkg);
+
         // 交集：既在 FileExplorerContextMenus 声明、又有 ComServer Class 的 clsid。
+        // 归并：同一包内 label 相同的多个 handler（如 OneDrive 21 个同名项）合并成一项，
+        //   clsid 以 ';' 拼接，启停时整组一起写黑名单。key = 包全名 + '
+' + 显示 label。
         for (const auto& cm : mr.contextMenus) {
             auto sit = mr.comServers.find(cm.first);
             if (sit == mr.comServers.end()) continue;
@@ -371,14 +400,31 @@ std::vector<Win11MenuItem> scan_win11menu() {
             seen.insert(cm.first);
 
             const std::wstring& clsid = cm.first;
-            std::wstring label = sit->second.displayName;
-            if (label.empty()) label = pkg;  // 兜底用包全名
+            // 显示名：ComServer DisplayName 优先；通用词/空则回退友好包名。
+            std::wstring label = resolve_indirect(sit->second.displayName);
+            if (is_generic_label(label)) label = pkgFriendly;
 
             // 适用场景文字
             std::wstring types;
             for (const auto& t : cm.second) {
                 if (!types.empty()) types += L", ";
                 types += t;
+            }
+
+            std::wstring mergeKey = pkg + L"
+" + label;
+            auto mit = pkgMerge.find(mergeKey);
+            if (mit != pkgMerge.end()) {
+                // 已有同包同名项 → 合并 CLSID（分号拼接），不新增行。
+                Win11MenuItem& ex = items[mit->second];
+                ex.clsid += ";" + wide_to_utf8(clsid);
+                bool bm = blockedMachine.count(clsid) > 0;
+                bool bu = blockedUser.count(clsid) > 0;
+                ex.blockedMachine = ex.blockedMachine || bm;
+                ex.blockedUser    = ex.blockedUser || bu;
+                ex.enabled = !(ex.blockedMachine || ex.blockedUser);
+                if (ex.contextTypes.empty()) ex.contextTypes = wide_to_utf8(types);
+                continue;
             }
 
             Win11MenuItem it;
@@ -394,8 +440,34 @@ std::vector<Win11MenuItem> scan_win11menu() {
             it.enabled = !(it.blockedMachine || it.blockedUser);
             it.canToggle = true;
             it.system = false;
+            pkgMerge[mergeKey] = items.size();
             items.push_back(std::move(it));
         }
+    }
+
+    // 归并：同一包内 label 相同的多个 handler（如 OneDrive 声明 21 个 CLSID、
+    // ComServer DisplayName 全填通用词）合并成一项，避免菜单刷屏。clsid 用分号拼接，
+    // 启停时对该组所有 CLSID 一起写黑名单（见 set_win11menu_enabled）。
+    {
+        std::vector<Win11MenuItem> merged;
+        std::map<std::wstring, size_t> keyIndex;  // package|label -> merged 下标
+        for (auto& it : items) {
+            std::wstring key = utf8_to_wide(it.package) + L"|" + utf8_to_wide(it.label);
+            auto f = keyIndex.find(key);
+            if (f == keyIndex.end()) {
+                keyIndex[key] = merged.size();
+                merged.push_back(std::move(it));
+            } else {
+                Win11MenuItem& tgt = merged[f->second];
+                tgt.clsid += ";";
+                tgt.clsid += it.clsid;               // 追加同组 CLSID
+                if (it.blockedMachine) tgt.blockedMachine = true;
+                if (it.blockedUser)    tgt.blockedUser = true;
+                // 组内任一被封锁即视为停用（保守：全组统一状态）
+                tgt.enabled = !(tgt.blockedMachine || tgt.blockedUser);
+            }
+        }
+        items.swap(merged);
     }
 
     // SystemCommandStore 项（只读） ---------------------------------------
@@ -438,8 +510,21 @@ std::string scan_win11menu_json() {
 
 std::string set_win11menu_enabled(const std::string& clsid,
                                   const std::string& displayName, bool enabled) {
-    std::wstring norm = normalize_guid(utf8_to_wide(clsid));
-    if (norm.empty()) return result_json(false, "bad_clsid");
+    // clsid 可能是分号拼接的多个 CLSID（归并项，如 OneDrive 一组）——全部处理。
+    std::vector<std::wstring> norms;
+    {
+        std::wstring all = utf8_to_wide(clsid);
+        size_t pos = 0;
+        while (pos <= all.size()) {
+            size_t sc = all.find(L';', pos);
+            std::wstring seg = all.substr(pos, sc == std::wstring::npos ? std::wstring::npos : sc - pos);
+            std::wstring n = normalize_guid(seg);
+            if (!n.empty()) norms.push_back(n);
+            if (sc == std::wstring::npos) break;
+            pos = sc + 1;
+        }
+    }
+    if (norms.empty()) return result_json(false, ad_clsid\);
 
     std::wstring disp = utf8_to_wide(displayName);
     bool anyOk = false;
@@ -447,12 +532,9 @@ std::string set_win11menu_enabled(const std::string& clsid,
     for (HKEY hive : { HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER }) {
         HKEY h = nullptr;
         if (enabled) {
-            // 启用：从黑名单删除该 clsid（含大括号/无括号变体）。
             if (RegOpenKeyExW(hive, kBlockedPath, 0, KEY_SET_VALUE | KEY_QUERY_VALUE, &h) != ERROR_SUCCESS)
                 continue;
-            // 直接删规范名
-            RegDeleteValueW(h, norm.c_str());
-            // 变体清理：遍历现有值名，规范化后相等的一并删。
+            // 收集所有需删的值名（对每个 norm 做变体匹配），再统一删。
             std::vector<std::wstring> toDelete;
             wchar_t nameBuf[256]; DWORD idx = 0, cch;
             while (true) {
@@ -461,25 +543,30 @@ std::string set_win11menu_enabled(const std::string& clsid,
                 if (st == ERROR_NO_MORE_ITEMS) break;
                 if (st != ERROR_SUCCESS) break;
                 std::wstring vn(nameBuf, cch);
-                if (normalize_guid(vn) == norm) toDelete.push_back(vn);
+                std::wstring vnNorm = normalize_guid(vn);
+                for (const auto& n : norms) {
+                    if (vnNorm == n) { toDelete.push_back(vn); break; }
+                }
             }
+            for (const auto& n : norms) RegDeleteValueW(h, n.c_str());
             for (const auto& vn : toDelete) RegDeleteValueW(h, vn.c_str());
             anyOk = true;
             RegCloseKey(h);
         } else {
-            // 停用：写入黑名单（不存在则建键）。
             if (RegCreateKeyExW(hive, kBlockedPath, 0, nullptr, 0,
                                 KEY_SET_VALUE, nullptr, &h, nullptr) != ERROR_SUCCESS)
                 continue;
-            LSTATUS st = RegSetValueExW(h, norm.c_str(), 0, REG_SZ,
-                                        reinterpret_cast<const BYTE*>(disp.c_str()),
-                                        (DWORD)((disp.size() + 1) * sizeof(wchar_t)));
-            if (st == ERROR_SUCCESS) anyOk = true;
+            for (const auto& n : norms) {
+                LSTATUS st = RegSetValueExW(h, n.c_str(), 0, REG_SZ,
+                                            reinterpret_cast<const BYTE*>(disp.c_str()),
+                                            (DWORD)((disp.size() + 1) * sizeof(wchar_t)));
+                if (st == ERROR_SUCCESS) anyOk = true;
+            }
             RegCloseKey(h);
         }
     }
 
-    return anyOk ? result_json(true, "ok") : result_json(false, "registry_failed");
+    return anyOk ? result_json(true, \ok\) : result_json(false, egistry_failed\);
 }
 
 }  // namespace cmm
