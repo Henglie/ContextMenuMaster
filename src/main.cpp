@@ -27,6 +27,7 @@
 #include "platform/windows/openwith_menu.h"
 #include "platform/windows/win11menu.h"
 #include "platform/windows/custom_menu.h"
+#include "platform/windows/filetype_menu.h"
 
 #include <windows.h>
 #include <cstdio>
@@ -584,6 +585,80 @@ int main(int argc, char** argv) {
             return 0;
         }
         std::printf("unknown custom subcommand: %s\n", argv[2]);
+        return 1;
+    }
+
+    // —— 文件类型右键菜单（某具体扩展名）—— //
+    //   CmmCli filetype scan   <ext>
+    //   CmmCli filetype toggle <on|off> <ext> <id>
+    //   CmmCli filetype add    <ext> <label> <kind> <target> [icon] [top|bottom]
+    //   CmmCli filetype del    <ext> <id>
+    //   CmmCli filetype backup <ext>
+    // ext 为 ASCII，但 label/target/id 可能含中文 → 统一走宽命令行取参数。
+    if (std::strcmp(cmd, "filetype") == 0) {
+        if (argc < 3) {
+            std::puts("usage: CmmCli filetype <scan|toggle|add|del|backup>");
+            return 1;
+        }
+        // 宽命令行按 argv 下标取 UTF-8 参数。越界返回空串。
+        auto wpick = [](int idx) -> std::string {
+            std::string s;
+            int wargc = 0;
+            LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+            if (wargv) {
+                if (idx < wargc && wargv[idx] && wargv[idx][0]) {
+                    int n = WideCharToMultiByte(CP_UTF8, 0, wargv[idx], -1,
+                                                nullptr, 0, nullptr, nullptr);
+                    if (n > 1) {
+                        s.resize(n - 1);
+                        WideCharToMultiByte(CP_UTF8, 0, wargv[idx], -1,
+                                            s.data(), n, nullptr, nullptr);
+                    }
+                }
+                LocalFree(wargv);
+            }
+            return s;
+        };
+        auto emit = [](const std::string& json) {
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+        };
+
+        if (std::strcmp(argv[2], "scan") == 0) {
+            if (argc < 4) { std::puts("usage: CmmCli filetype scan <ext>"); return 1; }
+            emit(cmm::scan_filetype_json(argv[3]));
+            return 0;
+        }
+        if (std::strcmp(argv[2], "toggle") == 0) {
+            if (argc < 5) {
+                std::puts("usage: CmmCli filetype toggle <on|off> <ext> <id>");
+                return 1;
+            }
+            bool enabled = (std::strcmp(argv[3], "on") == 0);
+            emit(cmm::set_filetype_enabled(wpick(4), wpick(5), enabled));
+            return 0;
+        }
+        if (std::strcmp(argv[2], "add") == 0) {
+            if (argc < 7) {
+                std::puts("usage: CmmCli filetype add <ext> <label> <kind> <target> [icon] [top|bottom]");
+                return 1;
+            }
+            emit(cmm::add_filetype_item(wpick(3), wpick(4), wpick(5), wpick(6),
+                                        wpick(7), wpick(8)));
+            return 0;
+        }
+        if (std::strcmp(argv[2], "del") == 0) {
+            if (argc < 5) { std::puts("usage: CmmCli filetype del <ext> <id>"); return 1; }
+            emit(cmm::del_filetype_item(wpick(3), wpick(4)));
+            return 0;
+        }
+        if (std::strcmp(argv[2], "backup") == 0) {
+            if (argc < 4) { std::puts("usage: CmmCli filetype backup <ext>"); return 1; }
+            emit(cmm::backup_filetype(argv[3]));
+            return 0;
+        }
+        std::printf("unknown filetype subcommand: %s\n", argv[2]);
         return 1;
     }
 

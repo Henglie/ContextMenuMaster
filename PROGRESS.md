@@ -17,7 +17,11 @@
 
 ## ▍一句话定位
 
-Windows 11 右键菜单主理工具。可视化改名换图标 + 列表批量管理 + 批量魔法追加后缀，核心卖点「Win11 经典/新版菜单一键互换并瞬间生效」。纯本地、只动 HKCU、可逆。作者 Henglie，MIT。
+Windows 11 右键菜单主理工具。可视化改名换图标 + 列表批量管理 + 批量魔法追加后缀，核心卖点「Win11 经典/新版菜单一键互换并瞬间生效」。提权后写真实 HKLM/HKCU（写前自动备份），纯本地、可逆。作者 Henglie，MIT。
+
+**双重定位（纲领，别再丢）**：本项目不只是「系统工具（右键菜单管理器）」，更是「**美化工具**」。两大差异化特色，超出参考项目 ContextMenuMgr：
+1. **所见即所得的可视化编辑**——1:1 仿真右键菜单，直接在菜单对象上改名/换图标/启停/删/新建，非纯表单。
+2. **富媒体 + 高度自定义右键菜单**——终极愿景：让用户给右键菜单插图片/视频/动图、套皮肤、自定义布局样式。标杆是 Nilesoft Shell（自绘菜单）而非 ContextMenuMgr（纯管理器）。详见「▍富媒体愿景路线图」。
 
 ---
 
@@ -148,6 +152,21 @@ ContextMenuMaster/
 
 ---
 
+## ▍富媒体愿景路线图（差异化核心，别再丢）
+
+参考项目 ContextMenuMgr 只是「注册表管理器」。本项目要做「系统工具 + 美化工具」，两大特色见「一句话定位」。
+
+**路线定型（恒烈 2026-07-07 拍板）**：富媒体走 **IContextMenu COM 扩展 DLL**（Bandizip/7-Zip 那套官方扩展点），**不做 Nilesoft 式全局 hook 自绘**。理由：hook 全局接管有系统风险（explorer 崩则全崩、灰色 hack），违背「不折腾用户系统」定位；而 IContextMenu 是微软官方扩展点，只挂在指定文件类型上、隔离、卸载即净。这才是 Bandizip「右键 .zip 看压缩包内容 / 预览图片缩略图」的真实实现。
+
+- **阶段 0（已具备）**：自建菜单项支持自定义图标（ICO/DLL 资源路径）+ FairyGlass 可视化 1:1 仿真编辑。这是特色 ① 的地基。
+- **阶段 1 · 图片图标**（现实第一步，纯注册表）：自建项图标从「限 ICO/DLL」扩到「任意 PNG/JPG/BMP」。做法：图片自动转 ICO（GDI+ 或 WIC 编码多尺寸 ico）存到 `%LOCALAPPDATA%\ContextMenuMaster\icons\`，注册表 `Icon` 指向它。经典菜单原生就能显示。**无需 COM，无需重启 explorer。**
+- **阶段 2 · IContextMenu 扩展 DLL**（中大，独立子工程）：写一个进程内 COM DLL 实现 `IContextMenu`，注册到指定文件类型的 `HKCR\<类型>\shellex\ContextMenuHandlers`。能力两层——① **动态子菜单**：右键某类型文件时 DLL 现场算内容（如读压缩包/文件夹列文件），`InsertMenuItem` 动态塞项，不写死注册表；② **owner-draw 富显示**：菜单项设 `MFT_OWNERDRAW` + 实现 `IContextMenu2/3::HandleMenuMsg`，在 `WM_MEASUREITEM`/`WM_DRAWITEM` 里自绘位图/缩略图/渐变。这是「预览压缩包、缩略图片」的机制本体。DLL 崩溃隔离、生命周期、注册/反注册都要处理，比纯注册表重一个量级。
+- **皮肤系统**（跨阶段）：菜单外观预设（配色/圆角/字体/间距/背景），阶段 2 owner-draw 起可套用，导出/导入 `.cmmskin`。
+
+**Win11 现代层天花板（硬限制，谁都绕不过）**：owner-draw 自绘缩略图**只在经典菜单层生效**（Shift+右键 /「显示更多选项」）。Win11 默认现代菜单只认 `IExplorerCommand`，第三方项**只能出「文本 + 单色图标」，不支持自绘位图/缩略图**。Bandizip 在 Win11 上的富预览也得点「显示更多选项」才出。结论：**经典层能做全套富媒体，现代层最多文本+图标**——除非退回 Nilesoft hook（已否决）。视频/动图同理，shell 菜单无原生承载，只能靠经典层 owner-draw 自绘。
+
+---
+
 ## ▍待办
 
 - [~] **场景补全（对标参考项目，恒烈要「以上全部」）**：顶层导航已拍平（6 场景 + Win+X 平级）。A 批注册表主场景**已落地**——`menu_scanner` 加 AllFileSystemObjects(`AllFilesystemObjects`,id=allfsobjects)、Computer(此电脑 CLSID,id=computer,无 handler)、Library(`LibraryFolder`,id=library)，enum+5 switch 补 case，CLI 真跑验证(allfsobjects=11/computer=2/library=1 项)。**注：folder 场景后端本就映射 `Directory\shell`，与参考项目 Directory 是同一根，不重复加**。B 批（特殊菜单，各独立模块）**已落地 + CLI 真跑验证**：`sendto_menu`(仿 winx 文件系统机制,无 hash,枚举/启停/增删,真跑 6 项)、`shellnew_menu`(遍历 HKCR\.ext\ShellNew,`ShellNew`↔`-ShellNew` 搬家停用,写前 reg 备份,真跑多扩展名友好名解析)、`dragdrop_menu`(handler-only 跨 Directory/Folder/Drive/AllFilesystemObjects 聚合,复用 move_handler 双 hive 搬家,真跑 9 项)、`openwith_menu`(只读枚举 Applications,canToggle=false,启停有风险暂不做)。C 批文件类型子场景 8 个(需动态 UI 输入,最后做)。前端(T19)：4 场景 + 三语文案 + 统一特殊菜单视图(sendto 增删,openwith 只读)已接,10 个 GUI bind,cp 通。**待恒烈真机 GUI 目视 + 启停/增删验证**。
@@ -182,3 +201,42 @@ ContextMenuMaster/
 - 前端 `ui/index.html`: data 补 `spEdit` 字段;sp 右键菜单加改名(仅 sendto)/换图标(仅 sendto 且 .lnk)入口;spEdit modal 复用 winx-add 样式;三语补 `toast.not_lnk`/`toast.icon_failed`。
 - 顺带修复 `win11menu.cpp` 历史损坏(HEAD 提交里就编译不过): 5 处字符串字面量被控制字符污染(`|`/`b`/`r` 被换行/退格/回车吃掉)+ `pkgMerge` 声明缺失。现全库编译通过。
 - 验证: debug 全量编译 0 error(真看 ninja); CmmCli 闭环真跑(含中文名 rename、seticon 写图标、非 .lnk 拒 not_lnk、非法名拒 bad_name、不存在拒 not_found、保留扩展名、清理无残留); JS 语法检查通过; build/debug 副本已同步。
+
+## 第九批（已完成）: C 批文件类型场景（追平最后一块）+ 富媒体路线定调
+
+**背景决策（本轮敲定，已写进定位/路线图）**:
+- 富媒体特色改走 **IContextMenu COM DLL**（Bandizip 那套：只挂特定文件类型、标准 shell 扩展点、owner-draw 画缩略图），**砍掉原 Nilesoft hook 自绘方案**（全局接管、系统风险高，恒烈否决）。定位标杆改 Bandizip。
+- Win11 硬边界：owner-draw 富显示只在经典菜单层（显示更多选项）生效，现代菜单第三方只能文本+单色图标，微软限制绕不过。详见 PROGRESS「▍富媒体愿景路线图」。
+- 富媒体 COM DLL 是独立重活，未开工；本轮只推 C 批（纯注册表，追平 ContextMenuMgr 文件类型页）。**至此追平 ContextMenuMgr 全部场景完成。**
+
+**C 批机制（真机 regedit 实测，别再重探）**: 一个扩展名的右键菜单项分散在 4 类根——
+1. `HKCR\.ext\shell` + `\shellex\ContextMenuHandlers`（扩展名直挂，少见）
+2. `HKCR\<ProgID>\shell`（.txt→txtfile、.zip→7-Zip.zip/CompressedFolder）
+3. `HKCR\SystemFileAssociations\.ext\shell`（.jpg 的 ShellImagePreview 在此）
+4. `HKCR\SystemFileAssociations\<PerceivedType>\shell`（image/text/… 一类共享）
+scan 聚合这 4 根 + 各自 shellex 启用/停用镜像。新建自建项写 HKCU SFA\.ext（用户级最稳，对该扩展名所有文件生效，不碰 ProgID/全局）。
+
+**后端 `filetype_menu.{h,cpp}`（853 行，全部落盘 + 编译通过）**:
+- id 格式 `<tag>|verb:<name>` / `<tag>|handler:<name>`（tag: ext/progid/sfaext/sfaperceived），场景内唯一。
+- `resolve_filetype`（规范化 .ext + 解析 ProgID/PerceivedType）、`scan_filetype`/`scan_filetype_json`（4 根聚合，去重，返 `{assoc,items}`）。
+- `set_filetype_enabled`：verb 加/删 `LegacyDisable`、handler `ContextMenuHandlers`↔`-ContextMenuHandlers` 搬家，两 hive（HKLM/HKCU）对称处理，幂等（已在目标态不报假失败）。仿 menu_scanner 成熟做法。
+- `add_filetype_item`（写 HKCU SFA\.ext\shell\cmm_xxx，program/folder/url/command 四型命令组装 + Icon/Position）、`del_filetype_item`（仅 cmm_ 前缀、仅 HKCU）、`backup_filetype`（reg export 4 根到 %LOCALAPPDATA%\ContextMenuMaster\backups）。写前自动备份即将改动的根。
+
+**CLI（main.cpp）**: `CmmCli filetype scan|toggle|add|del|backup <ext> ...`，label/id 走宽命令行取（支持中文）。
+
+**GUI（gui_main.cpp）**: 5 个 bind（scan_filetype 同步；set_filetype_enabled/add/del/backup 异步 3 参）。
+
+**前端（ui/index.html）**: 独立第三类场景（需先输入 .ext 再 scan，区别于固定/特殊场景）——nav 项（二级菜单组内）、ft-view 主视图（扩展名输入框 + 关联信息 chips + 4 根分组标签 + 启停开关 + 自建项删除）、ftAdd 弹层（复用 custom 字段）、右键 ft 分支（启停+删自建）、8 个 ft 方法、selectScene/setScene 分支（不自动扫描，等用户输入）。三语 i18n（scene.filetype + 完整 ft 文案组）。
+
+**验证（真机闭环全绿）**:
+- scan .txt（progid txtfile 的 open/print）/.jpg（sfaperceived image）/.zip（progid 7-Zip.zip + sfaext 金山转PDF 带前导空格中文项 + Compressed Folder handler）四根聚合、中文 label、停用态读取全对。
+- 自建项 add→scan(en=true)→toggle off(en=false)→on(en=true)→del→scan(custom=0) 可逆闭环，注册表零残留。
+- 系统 verb（金山转PDF，HKLM LegacyDisable 停用样本）启停往返后完美复原（HKLM 保留 LegacyDisable、HKCU 无残留键）。
+- debug 全量编译 0 error（真看 ninja：filetype_menu.cpp 单编 + core/CLI/GUI 三产物链接全过）。JS 语法 node 检查 RC 0。bin/ui 已手动同步（identical）。
+
+## 第十批（已完成）: Win11 专区默认视图修复 + 侧栏导航分组重构
+
+- **Win11 专区默认空白 bug**：`win11View` 在 data 里从未定义 → 两个 `v-show`（visual/list）都 false → 进专区什么都不显示。修：data 加 `win11View: 'visual'`（默认可视化视图）。
+- **侧栏导航重构分组**：原本 11+ 场景平铺一列太乱。改为三组带小标题（`nav-group`）——① 常用场景（desktop/file/folder/folder_bg/drive/recycle/allfsobjects/computer/library）② 二级菜单（sendto/shellnew/dragdrop/openwith + filetype）③ Win+X 独立。Win11 专区保持置顶。
+- **关于移出滚动列表**：原「关于」在 nav 滚动区内（`pageItems` v-for），场景多时要滚到底才看到。改为 `nav-about` 常驻侧栏底部（foot 之上），一直可见。三语补 `nav.grp_common/grp_special/grp_winx`。
+- 验证：JS 语法 node RC 0，bin/ui 已同步。GUI 目视待恒烈确认。

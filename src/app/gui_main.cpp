@@ -30,6 +30,7 @@
 #include "platform/windows/openwith_menu.h"
 #include "platform/windows/win11menu.h"
 #include "platform/windows/custom_menu.h"
+#include "platform/windows/filetype_menu.h"
 #include <vector>
 
 #pragma comment(lib, "comctl32.lib")
@@ -686,6 +687,53 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                     w.resolve(seq, 0, "{\"ok\":false,\"key\":\"bad_scene\"}"); return;
                 }
                 w.resolve(seq, 0, cmm::del_custom_item(scene, id));
+            }).detach();
+        }, nullptr);
+
+    // —— 文件类型右键菜单（某具体扩展名）——
+    //  scan 同步（注册表读快）；写操作（toggle/add/del/backup）走异步 3 参 bind。
+    //  scan:   [ext]
+    //  toggle: [ext, id, enabled]
+    //  add:    [ext, label, kind, target, iconSource, position]
+    //  del:    [ext, id]
+    //  backup: [ext]
+    w.bind("scan_filetype", [](const std::string& req) -> std::string {
+        return cmm::scan_filetype_json(parse_first_string_arg(req));
+    });
+    w.bind("set_filetype_enabled",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string ext = parse_string_arg_at(req, 0);
+            std::string id  = parse_string_arg_at(req, 1);
+            bool enabled = parse_bool_arg(req);
+            std::thread([&w, seq, ext, id, enabled]() {
+                w.resolve(seq, 0, cmm::set_filetype_enabled(ext, id, enabled));
+            }).detach();
+        }, nullptr);
+    w.bind("add_filetype_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string ext    = parse_string_arg_at(req, 0);
+            std::string label  = parse_string_arg_at(req, 1);
+            std::string kind   = parse_string_arg_at(req, 2);
+            std::string target = parse_string_arg_at(req, 3);
+            std::string icon   = parse_string_arg_at(req, 4);
+            std::string pos    = parse_string_arg_at(req, 5);
+            std::thread([&w, seq, ext, label, kind, target, icon, pos]() {
+                w.resolve(seq, 0, cmm::add_filetype_item(ext, label, kind, target, icon, pos));
+            }).detach();
+        }, nullptr);
+    w.bind("del_filetype_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string ext = parse_string_arg_at(req, 0);
+            std::string id  = parse_string_arg_at(req, 1);
+            std::thread([&w, seq, ext, id]() {
+                w.resolve(seq, 0, cmm::del_filetype_item(ext, id));
+            }).detach();
+        }, nullptr);
+    w.bind("backup_filetype",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string ext = parse_string_arg_at(req, 0);
+            std::thread([&w, seq, ext]() {
+                w.resolve(seq, 0, cmm::backup_filetype(ext));
             }).detach();
         }, nullptr);
 

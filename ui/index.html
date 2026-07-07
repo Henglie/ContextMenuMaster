@@ -114,6 +114,12 @@
   .nav-item:hover{ background:var(--glass-fill-strong); color:var(--fg); }
   .nav-item.on{ background:var(--accent-soft); color:var(--fg); border-color:rgba(var(--glow-a),.32); }
   .nav-item .ic{ width:14px; text-align:center; font-size:11px; opacity:.85; }
+  /* 侧栏分组小标题：弱化的分类标签，区隔常用/二级/Win+X 三组。 */
+  .nav-group{ flex-shrink:0; font-size:10px; font-weight:600; letter-spacing:.08em;
+    color:var(--fg-dim); text-transform:uppercase; padding:10px 12px 4px; user-select:none; }
+  .nav-group:first-child{ padding-top:4px; }
+  /* 关于：常驻底部，不随 nav 滚动。与 nav-item 同视觉，上方留细分隔。 */
+  .nav-pinned{ flex-shrink:0; margin-top:6px; border-top:1px solid rgba(255,255,255,.06); border-radius:0; }
   .foot{ flex-shrink:0; font-size:11px; color:var(--fg-dim); padding:8px 10px 2px; line-height:1.6; }
 
   /* ---- 主区 / Main ---- */
@@ -757,31 +763,38 @@
       <div class="nav-item" :class="{on: tab==='win11'}" @click="tab='win11'">
         <span class="ic">⊞</span>{{ t('nav.win11') }}
       </div>
-      <div class="nav-sep"></div>
-      <!-- 场景（右键菜单各来源）直接平铺到顶层，与 Win11/关于 平级 -->
-      <!-- Scenes flattened to top level, peer to Win11 zone / About -->
+
+      <!-- 分组一：常用场景（右键菜单各来源，最常用）/ Group 1: common scenes -->
+      <div class="nav-group">{{ t('nav.grp_common') }}</div>
       <div v-for="sc in scenes" :key="sc.id" class="nav-item"
            :class="{on: tab==='editor' && scene===sc.id}" @click="selectScene(sc.id)">
         <span class="ic">{{ sc.glyph }}</span>{{ t('scene.'+sc.id) }}
         <span class="nav-count" v-if="sceneCounts[sc.id] != null">{{ sceneCounts[sc.id] }}</span>
       </div>
-      <div class="nav-item" :class="{on: tab==='editor' && scene==='winx'}" @click="selectScene('winx')">
-        <span class="ic">⊞</span>{{ t('scene.winx') }}
-      </div>
-      <div class="nav-sep"></div>
-      <!-- 特殊菜单场景（发送到/新建/拖放/打开方式）—— 各自独立数据源 -->
-      <!-- Special-menu scenes (SendTo / New / DragDrop / OpenWith) -->
+
+      <!-- 分组二：二级菜单（发送到/新建/拖放/打开方式/文件类型）/ Group 2: sub-menus -->
+      <div class="nav-group">{{ t('nav.grp_submenu') }}</div>
       <div v-for="sc in specialScenes" :key="sc.id" class="nav-item"
            :class="{on: tab==='editor' && scene===sc.id}" @click="selectScene(sc.id)">
         <span class="ic">{{ sc.glyph }}</span>{{ t('scene.'+sc.id) }}
         <span class="nav-count" v-if="sceneCounts[sc.id] != null">{{ sceneCounts[sc.id] }}</span>
       </div>
-      <div class="nav-sep"></div>
-      <!-- 页面项（Win11 专区 / 关于）/ Page items -->
-      <div v-for="it in pageItems" :key="it.key" class="nav-item" :class="{on: tab===it.key}" @click="tab=it.key">
-        <span class="ic">{{ it.ic }}</span>{{ t('nav.'+it.key) }}
+      <!-- 文件类型场景：先输入扩展名再管理该类型菜单项（追平 + 特色）/ File-type scene -->
+      <div class="nav-item" :class="{on: tab==='editor' && scene==='filetype'}" @click="selectScene('filetype')">
+        <span class="ic">◈</span>{{ t('scene.filetype') }}
+        <span class="nav-count" v-if="sceneCounts['filetype'] != null">{{ sceneCounts['filetype'] }}</span>
+      </div>
+
+      <!-- 分组三：Win+X 菜单（独立文件系统数据源）/ Group 3: Win+X (standalone) -->
+      <div class="nav-group">{{ t('nav.grp_winx') }}</div>
+      <div class="nav-item" :class="{on: tab==='editor' && scene==='winx'}" @click="selectScene('winx')">
+        <span class="ic">⊞</span>{{ t('scene.winx') }}
       </div>
     </nav>
+    <!-- 关于：移出滚动列表，常驻侧栏底部，始终可见 / About: pinned to sidebar bottom, always visible -->
+    <div class="nav-item nav-pinned" :class="{on: tab==='about'}" @click="tab='about'">
+      <span class="ic">◔</span>{{ t('nav.about') }}
+    </div>
     <div class="foot">
       v{{ appVersion }} · {{ menuStatus.classic ? t('status.classic') : t('status.modern') }}
     </div>
@@ -904,6 +917,63 @@
 
         <!-- 特殊菜单场景（发送到 / 拖放 / 新建 / 打开方式）—— 统一扁平列表视图。
              sendto 支持新增；openwith 只读（canToggle=false）。/ Special-menu scenes. -->
+        <!-- 文件类型场景：输入扩展名扫描，再管理该类型右键菜单项（4 根聚合：扩展名/ProgID/SFA.ext/感知类型）。 -->
+        <div v-else-if="scene==='filetype'" class="sp-view ft-view">
+          <div class="slogan">{{ t('ft.slogan') }}</div>
+
+          <div class="toolbar ft-bar">
+            <input class="wa-input ft-ext-input" type="text" v-model="ftExt"
+                   :placeholder="t('ft.ext_ph')" @keyup.enter="ftScan" />
+            <button class="btn sm primary" @click="ftScan" :disabled="busy || ftLoading">
+              <span class="ic">⌕</span>{{ t('ft.scan') }}
+            </button>
+            <div class="spacer"></div>
+            <button v-if="ftCurExt" class="btn sm" @click="ftBackup" :disabled="busy">
+              <span class="ic">⛃</span>{{ t('ft.backup') }}
+            </button>
+            <button v-if="ftCurExt" class="btn sm primary" @click="ftAddOpen" :disabled="busy">
+              <span class="ic">＋</span>{{ t('ft.add') }}
+            </button>
+          </div>
+
+          <div v-if="ftAssoc && ftAssoc.valid" class="ft-assoc">
+            <span class="ft-chip">{{ t('ft.ext') }}: {{ ftAssoc.ext }}</span>
+            <span v-if="ftAssoc.progId" class="ft-chip">ProgID: {{ ftAssoc.progId }}</span>
+            <span v-if="ftAssoc.perceivedType" class="ft-chip">{{ t('ft.perceived') }}: {{ ftAssoc.perceivedType }}</span>
+          </div>
+
+          <div v-if="ftLoading" class="loading"><span class="spinner"></span>{{ t('winx.loading') }}</div>
+          <div v-else-if="!ftCurExt" class="empty">{{ t('ft.prompt') }}</div>
+          <div v-else-if="ftAssoc && !ftAssoc.valid" class="empty">{{ t('ft.bad_ext') }}</div>
+          <div v-else-if="!ftItems.length" class="empty">{{ t('ft.empty') }}</div>
+
+          <template v-else>
+            <div class="cat-title">{{ t('sp.detail_section') }}</div>
+            <div class="sp-list">
+              <div v-for="it in ftItems" :key="it.id"
+                   class="sp-item" :class="{disabled: !it.enabled}" :data-item-id="it.id"
+                   @contextmenu.prevent.stop="openFtCtx(it, $event)"
+                   :title="t('sp.right_click_hint')">
+                <span class="wi-glyph">
+                  <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
+                  <span v-else>▸</span>
+                </span>
+                <span class="wi-meta">
+                  <span class="wi-name">{{ it.label }}<span v-if="it.system" class="sp-sys">{{ t('sp.sys') }}</span><span class="ft-root">{{ t('ft.root_'+it.rootTag) }}</span></span>
+                  <span class="wi-target" :title="it.command || it.clsid">{{ it.command || it.clsid }}</span>
+                </span>
+                <span v-if="it.canToggle === false" class="sp-readonly">{{ t('sp.readonly') }}</span>
+                <span v-else class="wi-switch">
+                  <span class="switch" :class="{on: it.enabled}" @click="ftToggle(it)"><span class="knob"></span></span>
+                </span>
+                <button v-if="it.custom" class="wi-del" @click="ftDel(it)" :disabled="busy" :title="t('winx.del')">
+                  <span class="ic">⌫</span>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+
         <div v-else-if="isSpecialScene" class="sp-view">
           <div class="slogan">{{ t('sp.'+scene+'_slogan') }}</div>
 
@@ -1472,6 +1542,18 @@
             <span class="rc-ic">🔒</span>{{ t('sp.readonly') }}
           </div>
         </template>
+        <!-- 文件类型项：启停 + 删除(仅自建) -->
+        <template v-else-if="ctxMenu.kind === 'ft'">
+          <div v-if="ctxMenu.for.canToggle !== false" class="rc-item" @click="ctxAction('fttoggle')">
+            <span class="rc-ic">{{ ctxMenu.for.enabled ? '⊘' : '✓' }}</span>{{ ctxMenu.for.enabled ? t('ctxmenu.disable') : t('ctxmenu.enable') }}
+          </div>
+          <div v-if="ctxMenu.for.custom" class="rc-item danger" @click="ctxAction('ftdel')">
+            <span class="rc-ic">⌫</span>{{ t('winx.del') }}
+          </div>
+          <div v-if="ctxMenu.for.canToggle === false && !ctxMenu.for.custom" class="rc-item dis">
+            <span class="rc-ic">🔒</span>{{ t('sp.readonly') }}
+          </div>
+        </template>
         <!-- 经典场景项：改名 / 换图标 / 启停 / 删除(仅自建 cmm_ 项) -->
         <template v-else>
           <div class="rc-item" :class="{dis: !ctxMenu.for.canRename}"
@@ -1546,6 +1628,49 @@
     </div>
   </div>
 
+  <!-- 文件类型 新增自建项弹层（写 HKCU SFA\.ext）/ File-type add-item modal -->
+  <div v-if="ftAdd.show" class="modal-mask" @click.self="ftAdd.show=false">
+    <div class="modal winx-add-modal">
+      <div class="title">{{ t('ft.add_title') }}</div>
+      <div class="winx-add-body">
+        <label class="wa-field">
+          <span class="wa-label">{{ t('custom.f_label') }}</span>
+          <input class="wa-input" type="text" v-model="ftAdd.label" :placeholder="t('custom.f_label_ph')" />
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('custom.f_kind') }}</span>
+          <select class="wa-input" v-model="ftAdd.kind">
+            <option value="program">{{ t('custom.kind_program') }}</option>
+            <option value="folder">{{ t('custom.kind_folder') }}</option>
+            <option value="url">{{ t('custom.kind_url') }}</option>
+            <option value="command">{{ t('custom.kind_command') }}</option>
+          </select>
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('custom.f_target') }}</span>
+          <input class="wa-input" type="text" v-model="ftAdd.target"
+                 :placeholder="ftAdd.kind==='url' ? t('custom.f_target_url_ph') : t('custom.f_target_ph')" />
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('custom.f_icon') }}</span>
+          <input class="wa-input" type="text" v-model="ftAdd.icon" :placeholder="t('custom.f_icon_ph')" />
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('custom.f_position') }}</span>
+          <select class="wa-input" v-model="ftAdd.position">
+            <option value="">{{ t('custom.pos_default') }}</option>
+            <option value="top">{{ t('custom.pos_top') }}</option>
+            <option value="bottom">{{ t('custom.pos_bottom') }}</option>
+          </select>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn" @click="ftAdd.show=false">{{ t('common.cancel') }}</button>
+        <button class="btn primary" :disabled="busy" @click="ftAddCommit">{{ t('common.confirm') }}</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 「发送到」改名 / 换图标弹层 / Send-to rename / set-icon modal -->
   <div v-if="spEdit.show" class="modal-mask" @click.self="spEditCancel">
     <div class="modal winx-add-modal">
@@ -1599,6 +1724,7 @@ const i18n = {
       allfsobjects:'所有文件对象', computer:'此电脑', library:'库',
       winx:'Win+X 菜单', winx_todo:'Win+X 菜单管理开发中',
       sendto:'发送到', shellnew:'新建', dragdrop:'拖放处理', openwith:'打开方式',
+      filetype:'文件类型',
     },
     winx:{
       slogan:'Win+X 菜单（按 Win+X 或右键开始按钮弹出）。项按分组排列，Group3 在最上。启停 = 改快捷方式扩展名，随时可逆；新增项会自动写入 explorer 认可的 hash 后显示。',
@@ -1635,6 +1761,19 @@ const i18n = {
       del_desc_ow:'确定删除「{name}」？该应用项将移到 .deleted（可手动恢复），不影响系统关联。',
       del_desc_sn:'确定删除「{name}」的新建项？仅移除用户层 ShellNew，系统内建类型不受影响。',
       del_ok:'已删除',
+    },
+    ft:{
+      slogan:'管理某个具体扩展名的右键菜单项。先输入扩展名（如 .txt / .jpg / .zip）扫描，聚合四类注册表根：扩展名直挂、ProgID 关联、SystemFileAssociations\\.ext、感知类型。启停可逆（verb 加 LegacyDisable / handler 搬家），自建项写当前用户，写前自动备份。',
+      ext_ph:'输入扩展名，如 .txt / .jpg / .zip', scan:'扫描', add:'新增项', backup:'备份此类型',
+      ext:'扩展名', perceived:'感知类型',
+      prompt:'输入一个扩展名后点「扫描」，查看并管理该文件类型的右键菜单项。',
+      bad_ext:'扩展名非法（需以点开头、不含空格或路径分隔符）。',
+      empty:'该扩展名下未发现可管理的右键菜单项。',
+      need_ext:'请输入扩展名（如 .txt）',
+      add_title:'新增文件类型右键项（写当前用户）',
+      add_ok:'新增成功', del_title:'删除自建项', del_ok:'已删除',
+      del_desc:'确定删除「{name}」？此项由本工具创建（当前用户层），将从注册表移除，不影响系统关联。',
+      root_ext:'扩展名', root_progid:'ProgID', root_sfaext:'系统关联', root_sfaperceived:'感知类型',
     },
     search:{
       placeholder:'搜索所有菜单项…', empty:'无匹配项', count:'{n} 个结果',
@@ -1755,6 +1894,7 @@ const i18n = {
       allfsobjects:'所有檔案物件', computer:'本機', library:'媒體櫃',
       winx:'Win+X 選單', winx_todo:'Win+X 選單管理開發中',
       sendto:'傳送到', shellnew:'新增', dragdrop:'拖放處理', openwith:'開啟方式',
+      filetype:'檔案類型',
     },
     winx:{
       slogan:'Win+X 選單（按 Win+X 或右鍵開始鈕彈出）。項目存於檔案系統（%LOCALAPPDATA%\\...\\WinX），非登錄檔；停用＝改副檔名為 .lnk.disabled，可逆。分組由下而上排（Group3 在選單最上）。',
@@ -1916,6 +2056,7 @@ const i18n = {
       allfsobjects:'All file objects', computer:'This PC', library:'Library',
       winx:'Win+X Menu', winx_todo:'Win+X menu management coming soon',
       sendto:'Send To', shellnew:'New', dragdrop:'Drag & Drop', openwith:'Open With',
+      filetype:'File Type',
     },
     winx:{
       slogan:'Win+X menu (the power-user menu on right-click Start / Win+X). Items live in the file system, not the registry: toggling renames .lnk / .lnk.disabled, fully reversible. Groups are shown top-down (Group3 first).',
@@ -1956,6 +2097,19 @@ const i18n = {
       del_title:'Delete this item?',
       del_desc:'Deleting <b>{name}</b> sends its file to the Recycle Bin — recoverable. Continue?',
       del_desc_ow:'Delete <b>{name}</b>? The app entry moves to a ".deleted" mirror (recoverable). Continue?',
+    },
+    ft:{
+      slogan:'Manage the right-click menu for a specific file extension. Enter an extension (e.g. .txt / .jpg / .zip) to scan; items are aggregated from four registry roots: the extension key, its ProgID, SystemFileAssociations\\.ext, and the perceived type. Toggling is reversible (LegacyDisable for verbs, key move for handlers); custom items are written to the current user, with an automatic backup first.',
+      ext_ph:'Enter an extension, e.g. .txt / .jpg / .zip', scan:'Scan', add:'Add item', backup:'Back up this type',
+      ext:'Extension', perceived:'Perceived type',
+      prompt:'Enter an extension and click Scan to view and manage its right-click menu items.',
+      bad_ext:'Invalid extension (must start with a dot, no spaces or path separators).',
+      empty:'No manageable right-click menu items found for this extension.',
+      need_ext:'Please enter an extension (e.g. .txt)',
+      add_title:'Add a file-type item (written to current user)',
+      add_ok:'Added', del_title:'Delete custom item', del_ok:'Deleted',
+      del_desc:'Delete "{name}"? This item was created by this tool (current-user layer) and will be removed from the registry; system associations are unaffected.',
+      root_ext:'Extension', root_progid:'ProgID', root_sfaext:'System assoc', root_sfaperceived:'Perceived',
     },
     search:{
       placeholder:'Search all menus…',
@@ -2197,6 +2351,13 @@ const app = createApp({
       spLoading: false,
       spLoaded: {},            // { sceneId: true } 已加载过的特殊场景
       sendtoAdd: { show:false, target:'', name:'' },
+      // 文件类型场景（某具体扩展名的右键菜单）：需先输入 .ext 再 scan，独立于固定/特殊场景。
+      ftExt: '',              // 扩展名输入框
+      ftCurExt: '',           // 已扫描的扩展名
+      ftAssoc: null,          // {ext, progId, perceivedType, valid}
+      ftItems: [],
+      ftLoading: false,
+      ftAdd: { show:false, label:'', kind:'program', target:'', icon:'', position:'' },
 
       view: 'visual',          // visual（可视化双菜单并排）/ list（列表）
       items: [],               // 当前场景的菜单项（含 _checked / icon 临时字段）
@@ -2496,6 +2657,7 @@ const app = createApp({
         // scene 未变但刚从别的页切回：补一次数据加载（列表可能为空/过期）。
         this.editId = null; this.glyphPickFor = null;
         if (id === 'winx') { if (!this.winxLoaded) this.loadWinx(); return; }
+        if (id === 'filetype') return;  // 文件类型：等用户输入扩展名再扫，不自动加载
         if (this.specialScenes.some(s => s.id === id)) {
           if (!this.spLoaded[id]) this.loadSpecial(id); return;
         }
@@ -2512,6 +2674,7 @@ const app = createApp({
       this.editId = null; this.glyphPickFor = null;
       // Win+X 走独立文件系统数据源，不调 scan_scene；首次进入懒加载。
       if (id === 'winx') { if (!this.winxLoaded) this.loadWinx(); return; }
+      if (id === 'filetype') return;  // 文件类型：切入不自动扫，保留已有结果，等用户操作
       // 特殊菜单场景（sendto/dragdrop/shellnew/openwith）走各自 bind，懒加载一次。
       if (this.specialScenes.some(s => s.id === id)) {
         this.spItems = [];  // 切场景先清空，避免闪现上一个场景的数据
@@ -3222,6 +3385,8 @@ const app = createApp({
       else if (kind === 'spdel') this.spDel(it);
       else if (kind === 'sprename') this.spRenameOpen(it);
       else if (kind === 'spicon') this.spIconOpen(it);
+      else if (kind === 'fttoggle') this.ftToggle(it);
+      else if (kind === 'ftdel') this.ftDel(it);
       else if (kind === 'icon') {
         // 图标浮层需要一个锚点元素定位；右键来的没有 currentTarget，
         // 直接在右键落点附近弹出。
@@ -3382,6 +3547,118 @@ const app = createApp({
       this.closePopovers();
       this.ctxMenu = { for: it, kind: 'win11' };
       const w = 150, h = 60;
+      const left = Math.min(ev.clientX, window.innerWidth - w - 8);
+      const top = Math.min(ev.clientY, window.innerHeight - h - 8);
+      this.ctxMenuStyle = { left: left + 'px', top: top + 'px' };
+    },
+    // —— 文件类型场景 —— 某具体扩展名的右键菜单（4 根聚合）。scan 需先输入 .ext。
+    async ftScan() {
+      let ext = (this.ftExt || '').trim();
+      if (!ext) { this.showToast(this.t('ft.need_ext'), 'err'); return; }
+      if (ext[0] !== '.') ext = '.' + ext;
+      this.ftLoading = true;
+      this.ftItems = [];
+      this.ftAssoc = null;
+      try {
+        if (!window.scan_filetype) { this.showToast('backend scan_filetype missing', 'err'); return; }
+        // bind 返回对象，勿 JSON.parse。返回 {assoc, items}。
+        const res = await window.scan_filetype(ext);
+        this.ftAssoc = res && res.assoc ? res.assoc : { ext, valid:false };
+        const list = res && Array.isArray(res.items) ? res.items : [];
+        for (const it of list) it.icon = '';
+        this.ftItems = list;
+        this.ftCurExt = ext;
+        this.sceneCounts['filetype'] = list.length;
+        this.loadFtIcons();
+      } catch (e) {
+        this.showToast(this.t('toast.load_failed') + ' (' + e + ')', 'err');
+      } finally {
+        this.ftLoading = false;
+      }
+    },
+    async loadFtIcons() {
+      if (!window.extract_icon) return;
+      const target = this.ftItems;
+      await Promise.all(target.map(async (it) => {
+        if (!it.iconSource) return;
+        try {
+          const uri = await window.extract_icon(it.iconSource);
+          if (uri && uri.indexOf('data:image') === 0) it.icon = uri;
+        } catch (e) { /* 忽略 */ }
+      }));
+    },
+    async ftToggle(it) {
+      if (it.canToggle === false) return;
+      const next = !it.enabled;
+      const doIt = async () => {
+        const r = await this.callBackend('set_filetype_enabled', this.ftCurExt, it.id, next);
+        if (r && r.ok) {
+          it.enabled = next;
+          this.showToast(this.t('toast.auto_backed_up') + ' · ' + this.t('toast.ok'), 'ok');
+        } else {
+          this.showToast(this.t('toast.'+ (r?.key || 'registry_failed')), 'err');
+        }
+      };
+      // 系统项停用给二次确认（文件类型 verb/handler 多为系统/第三方）。
+      if (it.system && next === false) {
+        this.askConfirm(
+          this.t('confirm.sys_disable_title'),
+          this.t('confirm.sys_disable_desc', { name: this.escapeHtml(it.label || it.id) }),
+          doIt
+        );
+      } else {
+        doIt();
+      }
+    },
+    ftAddOpen() {
+      this.ftAdd = { show:true, label:'', kind:'program', target:'', icon:'', position:'' };
+    },
+    async ftAddCommit() {
+      const e = this.ftAdd;
+      const label = (e.label || '').trim();
+      const target = (e.target || '').trim();
+      if (!label) { this.showToast(this.t('custom.need_label'), 'err'); return; }
+      if (!target) { this.showToast(this.t('custom.need_target'), 'err'); return; }
+      const r = await this.callBackend('add_filetype_item', this.ftCurExt, label, e.kind, target, e.icon || '', e.position || '');
+      if (r && r.ok) {
+        this.ftAdd.show = false;
+        this.showToast(this.t('ft.add_ok'), 'ok');
+        await this.ftScan();
+      } else {
+        this.showToast(this.t('toast.'+ (r?.key || 'registry_failed')), 'err');
+      }
+    },
+    ftDel(it) {
+      if (!it.custom) return;
+      this.askConfirm(
+        this.t('ft.del_title'),
+        this.t('ft.del_desc', { name: this.escapeHtml(it.label || it.id) }),
+        async () => {
+          const r = await this.callBackend('del_filetype_item', this.ftCurExt, it.id);
+          if (r && r.ok) {
+            this.showToast(this.t('ft.del_ok'), 'ok');
+            await this.ftScan();
+          } else {
+            this.showToast(this.t('toast.'+ (r?.key || 'registry_failed')), 'err');
+          }
+        }
+      );
+    },
+    async ftBackup() {
+      if (!this.ftCurExt) return;
+      const r = await this.callBackend('backup_filetype', this.ftCurExt);
+      if (r && r.ok) {
+        this.showToast(this.t('toast.backup_done', { path: r.path || '' }), 'ok');
+      } else {
+        this.showToast(this.t('toast.'+ (r?.key || 'backup_failed')), 'err');
+      }
+    },
+    // 文件类型项右键菜单：启停 + 删除（仅自建 cmm_ 项）。
+    openFtCtx(it, ev) {
+      ev.preventDefault();
+      this.closePopovers();
+      this.ctxMenu = { for: it, kind: 'ft' };
+      const w = 150, h = 80;
       const left = Math.min(ev.clientX, window.innerWidth - w - 8);
       const top = Math.min(ev.clientY, window.innerHeight - h - 8);
       this.ctxMenuStyle = { left: left + 'px', top: top + 'px' };
