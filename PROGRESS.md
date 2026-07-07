@@ -167,6 +167,21 @@ ContextMenuMaster/
 
 ---
 
+## ▓本轮开工计划（恒烈 2026-07-07 定顺序：先可视化→再富媒体美化）
+
+追平 ContextMenuMgr 已全部完成（第九批 C 批收尾）。接下来做自己的两大特色，顺序已定：
+
+**阶段 A·可视化收尾（特色 ① 所见即所得，先做）**——当前可视化编辑已有但不齐，补齐两块：
+- 特殊菜单 / 文件类型项目的可视化改名/换图标（目前 sp 飞出项只能启停/删，无改名换图标）。
+- `.spv-*` 与 `.ctx-*` 两套菜单皮肤 CSS 并存，合并为一套（第五批遗留的真重构）。
+- 目标：所有场景的菜单项都能在可视化菜单上直接右键编辑（改名/换图标/启停/删），风格统一。
+
+**阶段 B·富媒体阶段 1（图片图标，纯注册表，接着做）**——见上「富媒体阶段 1」。自建项图标从限 ICO/DLL 扩到任意 PNG/JPG/BMP，图片转多尺寸 ICO（复用 icon_extract.cpp 的 GDI+ 基础）存 `%LOCALAPPDATA%\ContextMenuMaster\icons\`，注册表 Icon 指向。兼得换图标的可视化交互（阶段 A 成果直接用）。
+
+**阶段 C·富媒体阶段 2（IContextMenu COM DLL，独立重活）**——见上「富媒体阶段 2」。owner-draw 缩略图/动态子菜单，独立子工程，量级最大，最后做。
+
+---
+
 ## ▍待办
 
 - [~] **场景补全（对标参考项目，恒烈要「以上全部」）**：顶层导航已拍平（6 场景 + Win+X 平级）。A 批注册表主场景**已落地**——`menu_scanner` 加 AllFileSystemObjects(`AllFilesystemObjects`,id=allfsobjects)、Computer(此电脑 CLSID,id=computer,无 handler)、Library(`LibraryFolder`,id=library)，enum+5 switch 补 case，CLI 真跑验证(allfsobjects=11/computer=2/library=1 项)。**注：folder 场景后端本就映射 `Directory\shell`，与参考项目 Directory 是同一根，不重复加**。B 批（特殊菜单，各独立模块）**已落地 + CLI 真跑验证**：`sendto_menu`(仿 winx 文件系统机制,无 hash,枚举/启停/增删,真跑 6 项)、`shellnew_menu`(遍历 HKCR\.ext\ShellNew,`ShellNew`↔`-ShellNew` 搬家停用,写前 reg 备份,真跑多扩展名友好名解析)、`dragdrop_menu`(handler-only 跨 Directory/Folder/Drive/AllFilesystemObjects 聚合,复用 move_handler 双 hive 搬家,真跑 9 项)、`openwith_menu`(只读枚举 Applications,canToggle=false,启停有风险暂不做)。C 批文件类型子场景 8 个(需动态 UI 输入,最后做)。前端(T19)：4 场景 + 三语文案 + 统一特殊菜单视图(sendto 增删,openwith 只读)已接,10 个 GUI bind,cp 通。**待恒烈真机 GUI 目视 + 启停/增删验证**。
@@ -240,3 +255,16 @@ scan 聚合这 4 根 + 各自 shellex 启用/停用镜像。新建自建项写 H
 - **侧栏导航重构分组**：原本 11+ 场景平铺一列太乱。改为三组带小标题（`nav-group`）——① 常用场景（desktop/file/folder/folder_bg/drive/recycle/allfsobjects/computer/library）② 二级菜单（sendto/shellnew/dragdrop/openwith + filetype）③ Win+X 独立。Win11 专区保持置顶。
 - **关于移出滚动列表**：原「关于」在 nav 滚动区内（`pageItems` v-for），场景多时要滚到底才看到。改为 `nav-about` 常驻侧栏底部（foot 之上），一直可见。三语补 `nav.grp_common/grp_special/grp_winx`。
 - 验证：JS 语法 node RC 0，bin/ui 已同步。GUI 目视待恒烈确认。
+
+## 第十一批（已完成）: 导航两处 UI bug 修复（第十批遗留假核验）
+
+- **置底「关于」选中态直角**：`.nav-pinned`（实际类名，非第十批所记 nav-about）带 `border-radius:0` + `border-top`，选中时 `.nav-item.on` 的背景是直角，与其它圆角项不统一。修：去掉 `border-radius:0` 和 border-top，只留 `margin-top:6px`，选中态圆角随 `.nav-item` 统一。
+- **分组标题显示占位符**：模板用 `nav.grp_common/grp_submenu/grp_winx` 三键，但第十批「三语补齐」是假核验（实际从未写入 i18n），界面显示原始 key。修：字节级脚本三语真补——常用场景/二级菜单/快捷入口（zh-CN）、常用場景/二級選單/快捷入口（zh-TW）、Common/Submenus/Quick Access（en）。node --check RC 0 + 读回确认中文真落 + bin 同步。
+- **教训**：第十批的键名（grp_special）与模板实际用的（grp_submenu）都对不上，且"node RC 0"当时也没真跑——再次印证假核验连环骗，只有 node --check / 读回磁盘字节能戳穿。见 [[win-python3-alias-trap]]。
+
+
+## 第十三批（已确认）: 真机「没修复」根因 = 旧 GUI 进程未关
+
+- 恒烈真机反馈第十二批改动「都没修复」→ 排查发现 bin 与 src 字节比对 identical:True、四关键符号（win11View/spring-back/grp 中文/nav 圆角）全在 bin。修复本就到位。
+- **真根因**：旧 ContextMenuMaster.exe 进程未关，GUI 看的是未重启的旧窗口（WebView2 已加载的旧 HTML 常驻内存，改 bin/ui 不会热更）。 后重开即见。
+- **教训补入四道客观关卡之外的第五条**：改 UI 后除了真 cp 到 bin + 字节比对，还必须确认 GUI 进程已重启（旧进程锁旧窗口）。见 [[win-python3-alias-trap]]。

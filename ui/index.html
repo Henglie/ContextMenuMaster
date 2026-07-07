@@ -119,7 +119,7 @@
     color:var(--fg-dim); text-transform:uppercase; padding:10px 12px 4px; user-select:none; }
   .nav-group:first-child{ padding-top:4px; }
   /* 关于：常驻底部，不随 nav 滚动。与 nav-item 同视觉，上方留细分隔。 */
-  .nav-pinned{ flex-shrink:0; margin-top:6px; border-top:1px solid rgba(255,255,255,.06); border-radius:0; }
+  .nav-pinned{ flex-shrink:0; margin-top:6px; }
   .foot{ flex-shrink:0; font-size:11px; color:var(--fg-dim); padding:8px 10px 2px; line-height:1.6; }
 
   /* ---- 主区 / Main ---- */
@@ -133,11 +133,13 @@
   .header .spacer{ flex:1; }
 
   /* 全局搜索框（标题栏跳转搜索器，非页内筛选）/ Global search box (jump search) */
-  .search-wrap{ position:relative; width:260px; flex-shrink:0; }
-  .search-box{ display:flex; align-items:center; gap:7px; padding:7px 11px; border-radius:var(--radius-pill);
+  .search-wrap{ position:relative; flex-shrink:0; }
+  /* 弹性搜索框：聚焦时宽度用 FairyGlass 弹簧回弹曲线弹一下 + 蓝辉光。 */
+  .search-box{ display:flex; align-items:center; gap:7px; padding:7px 11px; width:220px; border-radius:var(--radius-pill);
     background:var(--glass-fill); border:1px solid var(--glass-stroke);
-    transition:border-color var(--dur-quick), background var(--dur-quick); }
-  .search-box:focus-within{ border-color:rgba(var(--glow-a),.5); background:var(--glass-fill-strong); }
+    transition:width .42s cubic-bezier(0.34,1.56,0.64,1), border-color var(--dur-quick), background var(--dur-quick), box-shadow var(--dur-quick); }
+  .search-box.active, .search-box:focus-within{ width:320px; border-color:rgba(var(--glow-a),.5); background:var(--glass-fill-strong);
+    box-shadow:0 0 0 3px rgba(var(--glow-a),.12), 0 4px 16px rgba(0,0,0,.28); }
   .search-box .s-ic{ font-size:12px; color:var(--fg-dim); flex-shrink:0; }
   .search-box input{ flex:1; min-width:0; background:transparent; border:none; outline:none;
     color:var(--fg); font-size:12.5px; font-family:inherit; }
@@ -1547,6 +1549,9 @@
           <div v-if="ctxMenu.for.canToggle !== false" class="rc-item" @click="ctxAction('fttoggle')">
             <span class="rc-ic">{{ ctxMenu.for.enabled ? '⊘' : '✓' }}</span>{{ ctxMenu.for.enabled ? t('ctxmenu.disable') : t('ctxmenu.enable') }}
           </div>
+          <div v-if="ctxMenu.for.custom" class="rc-item" @click="ctxAction('ftedit')">
+            <span class="rc-ic">✎</span>{{ t('custom.edit') }}
+          </div>
           <div v-if="ctxMenu.for.custom" class="rc-item danger" @click="ctxAction('ftdel')">
             <span class="rc-ic">⌫</span>{{ t('winx.del') }}
           </div>
@@ -1631,7 +1636,7 @@
   <!-- 文件类型 新增自建项弹层（写 HKCU SFA\.ext）/ File-type add-item modal -->
   <div v-if="ftAdd.show" class="modal-mask" @click.self="ftAdd.show=false">
     <div class="modal winx-add-modal">
-      <div class="title">{{ t('ft.add_title') }}</div>
+      <div class="title">{{ ftAdd.mode === 'edit' ? t('ft.edit_title') : t('ft.add_title') }}</div>
       <div class="winx-add-body">
         <label class="wa-field">
           <span class="wa-label">{{ t('custom.f_label') }}</span>
@@ -1715,7 +1720,7 @@
 const i18n = {
   'zh-CN': {
     brand:{ zh:'鼠标右键主理人', en:'Context Menu Master' },
-    nav:{ editor:'菜单编辑', win11:'Windows 11 专区', about:'关于' },
+    nav:{ editor:'菜单编辑', win11:'Windows 11 专区', about:'关于', grp_common:'常用场景', grp_submenu:'二级菜单', grp_winx:'快捷入口' },
     status:{ classic:'经典菜单', modern:'新版菜单' },
     theme:{ system:'跟随系统', light:'浅色', dark:'深色', preview_scope:'预览菜单主题' },
     scene:{
@@ -1885,7 +1890,7 @@ const i18n = {
   },
   'zh-TW': {
     brand:{ zh:'滑鼠右鍵主理人', en:'Context Menu Master' },
-    nav:{ editor:'選單編輯', win11:'Windows 11 專區', about:'關於' },
+    nav:{ editor:'選單編輯', win11:'Windows 11 專區', about:'關於', grp_common:'常用場景', grp_submenu:'二級選單', grp_winx:'快捷入口' },
     status:{ classic:'經典選單', modern:'新版選單' },
     theme:{ system:'跟隨系統', light:'淺色', dark:'深色', preview_scope:'預覽選單主題' },
     scene:{
@@ -2047,7 +2052,7 @@ const i18n = {
   },
   'en': {
     brand:{ zh:'Context Menu Master', en:'Context Menu Master' },
-    nav:{ editor:'Menu Editor', win11:'Windows 11 Zone', about:'About' },
+    nav:{ editor:'Menu Editor', win11:'Windows 11 Zone', about:'About', grp_common:'Common', grp_submenu:'Submenus', grp_winx:'Quick Access' },
     status:{ classic:'Classic menu', modern:'New menu' },
     theme:{ system:'System', light:'Light', dark:'Dark', preview_scope:'Preview menu theme' },
     scene:{
@@ -2357,9 +2362,10 @@ const app = createApp({
       ftAssoc: null,          // {ext, progId, perceivedType, valid}
       ftItems: [],
       ftLoading: false,
-      ftAdd: { show:false, label:'', kind:'program', target:'', icon:'', position:'' },
+      ftAdd: { show:false, mode:'add', id:'', label:'', kind:'program', target:'', icon:'', position:'' },
 
       view: 'visual',          // visual（可视化双菜单并排）/ list（列表）
+      win11View: 'visual',   // Win11 专区默认可视化视图
       items: [],               // 当前场景的菜单项（含 _checked / icon 临时字段）
       loading: false,
       busy: false,
@@ -3386,6 +3392,7 @@ const app = createApp({
       else if (kind === 'sprename') this.spRenameOpen(it);
       else if (kind === 'spicon') this.spIconOpen(it);
       else if (kind === 'fttoggle') this.ftToggle(it);
+      else if (kind === 'ftedit') this.ftEditOpen(it);
       else if (kind === 'ftdel') this.ftDel(it);
       else if (kind === 'icon') {
         // 图标浮层需要一个锚点元素定位；右键来的没有 currentTarget，
@@ -3611,7 +3618,16 @@ const app = createApp({
       }
     },
     ftAddOpen() {
-      this.ftAdd = { show:true, label:'', kind:'program', target:'', icon:'', position:'' };
+      this.ftAdd = { show:true, mode:'add', id:'', label:'', kind:'program', target:'', icon:'', position:'' };
+    },
+    // 编辑自建项：command 反解 kind/target（复用 custom 的 guessKind/guessTarget），回填弹层。
+    ftEditOpen(it) {
+      if (!it.custom) return;
+      this.ftAdd = {
+        show:true, mode:'edit', id: it.id,
+        label: it.label || '', kind: this.guessKind(it.command), target: this.guessTarget(it.command),
+        icon: it.iconSource || '', position: '',
+      };
     },
     async ftAddCommit() {
       const e = this.ftAdd;
@@ -3619,10 +3635,15 @@ const app = createApp({
       const target = (e.target || '').trim();
       if (!label) { this.showToast(this.t('custom.need_label'), 'err'); return; }
       if (!target) { this.showToast(this.t('custom.need_target'), 'err'); return; }
-      const r = await this.callBackend('add_filetype_item', this.ftCurExt, label, e.kind, target, e.icon || '', e.position || '');
+      let r;
+      if (e.mode === 'edit') {
+        r = await this.callBackend('edit_filetype_item', this.ftCurExt, e.id, label, e.kind, target, e.icon || '', e.position || '');
+      } else {
+        r = await this.callBackend('add_filetype_item', this.ftCurExt, label, e.kind, target, e.icon || '', e.position || '');
+      }
       if (r && r.ok) {
         this.ftAdd.show = false;
-        this.showToast(this.t('ft.add_ok'), 'ok');
+        this.showToast(this.t(e.mode === 'edit' ? 'toast.ok' : 'ft.add_ok'), 'ok');
         await this.ftScan();
       } else {
         this.showToast(this.t('toast.'+ (r?.key || 'registry_failed')), 'err');
