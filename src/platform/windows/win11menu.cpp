@@ -371,6 +371,7 @@ std::vector<Win11MenuItem> scan_win11menu() {
     auto blockedUser    = read_blocked(HKEY_CURRENT_USER);
 
     std::set<std::wstring> seen;  // 去重（同 clsid 跨包只取一次）
+    std::map<std::wstring, size_t> pkgMerge;  // package|label -> items 下标（同包同名归并）
     for (const auto& pkg : enum_packages()) {
         std::wstring installPath = get_install_path(pkg);
         if (installPath.empty()) continue;
@@ -391,8 +392,7 @@ std::vector<Win11MenuItem> scan_win11menu() {
 
         // 交集：既在 FileExplorerContextMenus 声明、又有 ComServer Class 的 clsid。
         // 归并：同一包内 label 相同的多个 handler（如 OneDrive 21 个同名项）合并成一项，
-        //   clsid 以 ';' 拼接，启停时整组一起写黑名单。key = 包全名 + '
-' + 显示 label。
+        //   clsid 以 ';' 拼接，启停时整组一起写黑名单。key = 包全名 + '|' + 显示 label。
         for (const auto& cm : mr.contextMenus) {
             auto sit = mr.comServers.find(cm.first);
             if (sit == mr.comServers.end()) continue;
@@ -411,8 +411,7 @@ std::vector<Win11MenuItem> scan_win11menu() {
                 types += t;
             }
 
-            std::wstring mergeKey = pkg + L"
-" + label;
+            std::wstring mergeKey = pkg + L"|" + label;
             auto mit = pkgMerge.find(mergeKey);
             if (mit != pkgMerge.end()) {
                 // 已有同包同名项 → 合并 CLSID（分号拼接），不新增行。
@@ -524,7 +523,7 @@ std::string set_win11menu_enabled(const std::string& clsid,
             pos = sc + 1;
         }
     }
-    if (norms.empty()) return result_json(false, ad_clsid\);
+    if (norms.empty()) return result_json(false, "bad_clsid");
 
     std::wstring disp = utf8_to_wide(displayName);
     bool anyOk = false;
@@ -566,7 +565,7 @@ std::string set_win11menu_enabled(const std::string& clsid,
         }
     }
 
-    return anyOk ? result_json(true, \ok\) : result_json(false, egistry_failed\);
+    return anyOk ? result_json(true, "ok") : result_json(false, "registry_failed");
 }
 
 }  // namespace cmm

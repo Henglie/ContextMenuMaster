@@ -1458,6 +1458,13 @@
           <div v-if="ctxMenu.for.canToggle !== false" class="rc-item" @click="ctxAction('toggle')">
             <span class="rc-ic">{{ ctxMenu.for.enabled ? '⊘' : '✓' }}</span>{{ ctxMenu.for.enabled ? t('ctxmenu.disable') : t('ctxmenu.enable') }}
           </div>
+          <!-- 改名 / 换图标：仅「发送到」。换图标仅 .lnk 项（后端只认 .lnk）。 -->
+          <div v-if="scene==='sendto'" class="rc-item" @click="ctxAction('sprename')">
+            <span class="rc-ic">✎</span>{{ t('list.rename') }}
+          </div>
+          <div v-if="scene==='sendto' && /\.lnk(\.disabled)?$/i.test(ctxMenu.for.id)" class="rc-item" @click="ctxAction('spicon')">
+            <span class="rc-ic">◆</span>{{ t('list.icon_btn') }}
+          </div>
           <div v-if="spCtxCanDel(ctxMenu.for)" class="rc-item danger" @click="ctxAction('spdel')">
             <span class="rc-ic">⌫</span>{{ t('winx.del') }}
           </div>
@@ -1535,6 +1542,25 @@
       <div class="actions">
         <button class="btn" @click="sendtoAdd.show=false">{{ t('common.cancel') }}</button>
         <button class="btn primary" :disabled="busy" @click="spAddCommit">{{ t('common.confirm') }}</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 「发送到」改名 / 换图标弹层 / Send-to rename / set-icon modal -->
+  <div v-if="spEdit.show" class="modal-mask" @click.self="spEditCancel">
+    <div class="modal winx-add-modal">
+      <div class="title">{{ spEdit.mode==='rename' ? t('list.rename') : t('list.icon_btn') }}</div>
+      <div class="winx-add-body">
+        <label class="wa-field">
+          <span class="wa-label">{{ spEdit.mode==='rename' ? t('sp.add_name') : t('editor.f_icon') }}</span>
+          <input class="wa-input" type="text" v-model="spEdit.value"
+                 :placeholder="spEdit.mode==='rename' ? t('sp.add_name_ph') : t('editor.f_icon_ph')"
+                 @keyup.enter="spEditCommit" />
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn" @click="spEditCancel">{{ t('common.cancel') }}</button>
+        <button class="btn primary" :disabled="busy" @click="spEditCommit">{{ t('common.confirm') }}</button>
       </div>
     </div>
   </div>
@@ -1715,6 +1741,7 @@ const i18n = {
       create_failed:'创建快捷方式失败', hash_failed:'写入 hash 失败（explorer 可能不显示）',
       delete_failed:'删除失败',
       sp_failed:'操作失败', sendto_root_missing:'找不到「发送到」目录',
+      not_lnk:'仅快捷方式（.lnk）可换图标', icon_failed:'换图标失败',
     },
   },
   'zh-TW': {
@@ -1874,6 +1901,7 @@ const i18n = {
       create_failed:'建立捷徑失敗', hash_failed:'寫入 hash 失敗（explorer 可能不顯示）',
       delete_failed:'刪除失敗',
       sp_failed:'操作失敗', sendto_root_missing:'找不到「傳送到」資料夾', sendto_failed:'操作失敗',
+      not_lnk:'僅捷徑（.lnk）可換圖示', icon_failed:'換圖示失敗',
       dragdrop_root_missing:'找不到拖放處理程式', shellnew_root_missing:'找不到新增選單項',
     },
   },
@@ -2037,6 +2065,7 @@ const i18n = {
       create_failed:'Failed to create shortcut', hash_failed:'Failed to write hash (Explorer may hide it)',
       delete_failed:'Delete failed',
       sp_failed:'Operation failed', sendto_root_missing:'SendTo folder not found',
+      not_lnk:'Only shortcuts (.lnk) support icon change', icon_failed:'Icon change failed',
     },
   },
 };
@@ -2188,6 +2217,8 @@ const app = createApp({
       // Right-click action menu for visual rows.
       ctxMenu: { for:null },
       ctxMenuStyle: {},
+      // 特殊菜单（仅 sendto）改名/换图标输入弹层。mode: 'rename' | 'icon'。
+      spEdit: { show:false, mode:'rename', id:'', value:'' },
       glyphChoices: ['▤','✂','⧉','▥','⌦','✎','⚙','★','◆','▶','⤓','↗','⌕','⚿','⬆','⬇','＋','✦','♥','◉','◯','◍','■','□','▲','△','▼','▽','○','●','◇','◈'],
 
       magicSuffix: '',
@@ -3189,6 +3220,8 @@ const app = createApp({
       else if (kind === 'toggle') { if (isWin11) this.win11Toggle(it); else this.askToggle(it); }
       else if (kind === 'delete') { if (it.custom) this.customDel(it); }
       else if (kind === 'spdel') this.spDel(it);
+      else if (kind === 'sprename') this.spRenameOpen(it);
+      else if (kind === 'spicon') this.spIconOpen(it);
       else if (kind === 'icon') {
         // 图标浮层需要一个锚点元素定位；右键来的没有 currentTarget，
         // 直接在右键落点附近弹出。
@@ -3362,6 +3395,30 @@ const app = createApp({
       const left = Math.min(ev.clientX, window.innerWidth - w - 8);
       const top = Math.min(ev.clientY, window.innerHeight - h - 8);
       this.ctxMenuStyle = { left: left + 'px', top: top + 'px' };
+    },
+    // 特殊菜单改名（仅 sendto）：打开输入弹层，回填当前显示名。
+    spRenameOpen(it) {
+      this.spEdit = { show:true, mode:'rename', id: it.id, value: it.label || '' };
+    },
+    // 特殊菜单换图标（仅 sendto）：打开输入弹层，回填当前图标源。
+    spIconOpen(it) {
+      this.spEdit = { show:true, mode:'icon', id: it.id, value: it.iconSource || '' };
+    },
+    spEditCancel() { this.spEdit.show = false; },
+    async spEditCommit() {
+      const e = this.spEdit;
+      const val = (e.value || '').trim();
+      if (e.mode === 'rename') {
+        if (!val) { this.showToast(this.t('sp.need_name'), 'err'); return; }
+        const r = await this.callBackend('rename_sendto_item', e.id, val);
+        if (r && r.ok) { this.spEdit.show = false; this.showToast(this.t('toast.ok'), 'ok'); await this.loadSpecial(this.scene, true); }
+        else this.showToast(this.t('toast.'+ (r?.key || 'registry_failed')), 'err');
+      } else {
+        // 换图标：空值也允许（清空走后端 icon_failed 时提示）。
+        const r = await this.callBackend('set_sendto_icon', e.id, val);
+        if (r && r.ok) { this.spEdit.show = false; this.showToast(this.t('toast.ok'), 'ok'); await this.loadSpecial(this.scene, true); }
+        else this.showToast(this.t('toast.'+ (r?.key || 'icon_failed')), 'err');
+      }
     },
     // 特殊菜单项能否删除：sendto 全可；openwith/shellnew 仅非系统项。
     spCtxCanDel(it) {

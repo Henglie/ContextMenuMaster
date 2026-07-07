@@ -356,6 +356,45 @@ int main(int argc, char** argv) {
             std::fflush(stdout);
             return 0;
         }
+        // CmmCli sendto rename <fileName> <newName>
+        // CmmCli sendto seticon <fileName> <iconSource>
+        // 两个参数都可能含中文/空格 → 统一走宽命令行取（索引 3、4）。
+        if (std::strcmp(argv[2], "rename") == 0 ||
+            std::strcmp(argv[2], "seticon") == 0) {
+            if (argc < 5) {
+                std::printf("usage: CmmCli sendto %s <fileName> <arg>\n", argv[2]);
+                return 1;
+            }
+            std::string a3, a4;
+            {
+                int wargc = 0;
+                LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+                if (wargv) {
+                    auto pick = [](LPWSTR w) -> std::string {
+                        std::string s;
+                        if (w && w[0]) {
+                            int n = WideCharToMultiByte(CP_UTF8, 0, w, -1,
+                                                        nullptr, 0, nullptr, nullptr);
+                            if (n > 1) {
+                                s.resize(n - 1);
+                                WideCharToMultiByte(CP_UTF8, 0, w, -1,
+                                                    s.data(), n, nullptr, nullptr);
+                            }
+                        }
+                        return s;
+                    };
+                    if (wargc >= 5) { a3 = pick(wargv[3]); a4 = pick(wargv[4]); }
+                    LocalFree(wargv);
+                }
+            }
+            std::string json = (std::strcmp(argv[2], "rename") == 0)
+                ? cmm::rename_sendto_item(a3, a4)
+                : cmm::set_sendto_icon(a3, a4);
+            std::fwrite(json.data(), 1, json.size(), stdout);
+            std::fwrite("\n", 1, 1, stdout);
+            std::fflush(stdout);
+            return 0;
+        }
         std::printf("unknown sendto subcommand: %s\n", argv[2]);
         return 1;
     }

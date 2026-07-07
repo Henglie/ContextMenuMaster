@@ -173,3 +173,12 @@ ContextMenuMaster/
 - git 提交用 `Henglie <ebhenglie@gmail.com>`，**绝不出现 Claude 署名 / Co-Authored-By / AI 痕迹**。
 - 要 GUI 不要命令行。讲清「为什么」，给推荐而非罗列；能定的直接做，不确定才问。
 - **删除文件走回收站**，不用 rm 直接抹除。
+
+
+## 第八批（已完成）: 特殊菜单 sendto 改名/换图标
+
+- 目标: 给 sendto 项右键菜单加改名/换图标(openwith/shellnew 涉及全局文件类型风险高,本批只做 sendto)。
+- 后端 `sendto_menu.cpp`: `rename_sendto_item`(改文件名主干,保留原扩展名与 .disabled 后缀,启停态不变;含 \ / .. 非法校验)+ `set_sendto_icon`(仅 .lnk 项,写 IShellLink IconLocation,支持 "路径,索引")。`.h` 声明、`main.cpp` CLI(sendto rename/seticon 子命令,宽命令行取参含中文)、`gui_main.cpp` GUI bind(双参异步)全部落地。
+- 前端 `ui/index.html`: data 补 `spEdit` 字段;sp 右键菜单加改名(仅 sendto)/换图标(仅 sendto 且 .lnk)入口;spEdit modal 复用 winx-add 样式;三语补 `toast.not_lnk`/`toast.icon_failed`。
+- 顺带修复 `win11menu.cpp` 历史损坏(HEAD 提交里就编译不过): 5 处字符串字面量被控制字符污染(`|`/`b`/`r` 被换行/退格/回车吃掉)+ `pkgMerge` 声明缺失。现全库编译通过。
+- 验证: debug 全量编译 0 error(真看 ninja); CmmCli 闭环真跑(含中文名 rename、seticon 写图标、非 .lnk 拒 not_lnk、非法名拒 bad_name、不存在拒 not_found、保留扩展名、清理无残留); JS 语法检查通过; build/debug 副本已同步。

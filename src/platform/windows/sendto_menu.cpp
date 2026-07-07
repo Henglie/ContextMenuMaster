@@ -294,4 +294,97 @@ std::string del_sendto_item(const std::string& id) {
     return result_json(true, "ok");
 }
 
+std::string rename_sendto_item(const std::string& id, const std::string& newName) {
+    std::wstring root = sendto_root();
+    if (root.empty()) return result_json(false, "sendto_root_missing");
+
+    std::wstring rel = utf8_to_wide(id);
+    std::wstring wnew = utf8_to_wide(newName);
+    if (rel.find(L"..") != std::wstring::npos ||
+        rel.find(L'\\') != std::wstring::npos ||
+        rel.find(L'/') != std::wstring::npos)
+        return result_json(false, "bad_id");
+    if (wnew.empty() ||
+        wnew.find(L"..") != std::wstring::npos ||
+        wnew.find(L'\\') != std::wstring::npos ||
+        wnew.find(L'/') != std::wstring::npos)
+        return result_json(false, "bad_name");
+
+    std::wstring core = rel;
+    std::wstring disabledSuffix;
+    if (ends_with_ci(core, L".disabled")) {
+        disabledSuffix = core.substr(core.size() - 9);
+        core = core.substr(0, core.size() - 9);
+    }
+    std::wstring ext;
+    size_t dot = core.rfind(L'.');
+    if (dot != std::wstring::npos && dot > 0) ext = core.substr(dot);
+    std::wstring newRel = wnew + ext + disabledSuffix;
+
+    std::wstring src = root + L"\\" + rel;
+    std::wstring dst = root + L"\\" + newRel;
+    if (GetFileAttributesW(src.c_str()) == INVALID_FILE_ATTRIBUTES)
+        return result_json(false, "not_found");
+    if (CompareStringOrdinal(src.c_str(), -1, dst.c_str(), -1, TRUE) == CSTR_EQUAL)
+        return result_json(true, "ok");
+    if (GetFileAttributesW(dst.c_str()) != INVALID_FILE_ATTRIBUTES)
+        return result_json(false, "already_exists");
+    if (!MoveFileExW(src.c_str(), dst.c_str(), 0))
+        return result_json(false, "rename_failed");
+    return result_json(true, "ok");
+}
+
+std::string set_sendto_icon(const std::string& id, const std::string& iconSource) {
+    std::wstring root = sendto_root();
+    if (root.empty()) return result_json(false, "sendto_root_missing");
+
+    std::wstring rel = utf8_to_wide(id);
+    if (rel.find(L"..") != std::wstring::npos ||
+        rel.find(L'\\') != std::wstring::npos ||
+        rel.find(L'/') != std::wstring::npos)
+        return result_json(false, "bad_id");
+
+    std::wstring stem = rel;
+    if (ends_with_ci(stem, L".disabled")) stem = stem.substr(0, stem.size() - 9);
+    if (!ends_with_ci(stem, L".lnk")) return result_json(false, "not_lnk");
+
+    std::wstring full = root + L"\\" + rel;
+    if (GetFileAttributesW(full.c_str()) == INVALID_FILE_ATTRIBUTES)
+        return result_json(false, "not_found");
+
+    std::wstring wicon = utf8_to_wide(iconSource);
+    std::wstring iconPath = wicon;
+    int iconIndex = 0;
+    size_t comma = wicon.rfind(L',');
+    if (comma != std::wstring::npos) {
+        std::wstring idxStr = wicon.substr(comma + 1);
+        bool allDigit = !idxStr.empty();
+        for (wchar_t c : idxStr) if (c < L'0' || c > L'9') { allDigit = false; break; }
+        if (allDigit) {
+            iconPath = wicon.substr(0, comma);
+            iconIndex = _wtoi(idxStr.c_str());
+        }
+    }
+
+    bool comInit = SUCCEEDED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED));
+    bool ok = false;
+    IShellLinkW* link = nullptr;
+    if (SUCCEEDED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                   IID_IShellLinkW, reinterpret_cast<void**>(&link)))) {
+        IPersistFile* pf = nullptr;
+        if (SUCCEEDED(link->QueryInterface(IID_IPersistFile,
+                                           reinterpret_cast<void**>(&pf)))) {
+            if (SUCCEEDED(pf->Load(full.c_str(), STGM_READWRITE))) {
+                if (SUCCEEDED(link->SetIconLocation(iconPath.c_str(), iconIndex))) {
+                    if (SUCCEEDED(pf->Save(full.c_str(), TRUE))) ok = true;
+                }
+            }
+            pf->Release();
+        }
+        link->Release();
+    }
+    if (comInit) CoUninitialize();
+    return ok ? result_json(true, "ok") : result_json(false, "icon_failed");
+}
+
 }  // namespace cmm

@@ -525,6 +525,22 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                 w.resolve(seq, 0, cmm::del_sendto_item(id));
             }).detach();
         }, nullptr);
+    w.bind("rename_sendto_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id      = parse_string_arg_at(req, 0);
+            std::string newName = parse_string_arg_at(req, 1);
+            std::thread([&w, seq, id, newName]() {
+                w.resolve(seq, 0, cmm::rename_sendto_item(id, newName));
+            }).detach();
+        }, nullptr);
+    w.bind("set_sendto_icon",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id   = parse_string_arg_at(req, 0);
+            std::string icon = parse_string_arg_at(req, 1);
+            std::thread([&w, seq, id, icon]() {
+                w.resolve(seq, 0, cmm::set_sendto_icon(id, icon));
+            }).detach();
+        }, nullptr);
 
     // —— DragDrop：拖放处理程序（handler 跨对象类，搬 -DragDropHandlers 启停）——
     w.bind("scan_dragdrop", [](const std::string&) -> std::string {

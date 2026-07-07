@@ -49,4 +49,16 @@ std::string add_sendto_item(const std::string& targetPath, const std::string& na
 // 返回 {"ok":bool,"key":"..."}。
 std::string del_sendto_item(const std::string& id);
 
+// 重命名某项：改文件名主干，保留原扩展名与 ".disabled" 后缀（可逆的启停状态不变）。
+//   id      scan 返回的文件名
+//   newName 新显示名（不含扩展名；含 \ / .. 视为非法）
+// 返回 {"ok":bool,"key":"..."}。key 可能为 bad_id/bad_name/not_found/already_exists/rename_failed。
+std::string rename_sendto_item(const std::string& id, const std::string& newName);
+
+// 换图标：仅 .lnk 项可换（写 IShellLink 的 IconLocation）。
+//   id         scan 返回的文件名（须为 .lnk / .lnk.disabled）
+//   iconSource 图标源（"路径" 或 "路径,索引"）
+// 返回 {"ok":bool,"key":"..."}。key 可能为 bad_id/not_lnk/not_found/icon_failed。
+std::string set_sendto_icon(const std::string& id, const std::string& iconSource);
+
 }  // namespace cmm
