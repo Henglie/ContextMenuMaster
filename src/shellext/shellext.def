@@ -1,0 +1,13 @@
+; ============================================================
+;  鼠标右键主理人 ContextMenuMaster —— Shell 扩展 DLL 导出表
+;
+;  COM 进程内服务器的标准四导出。用 .def 而非 __declspec(dllexport)：
+;  导出名不带修饰（regsvr32 / COM 运行时按裸名 GetProcAddress 找），
+;  且 PRIVATE 让它们不进导入库，干净。
+; ============================================================
+LIBRARY CmmShellExt
+EXPORTS
+    DllGetClassObject   PRIVATE
+    DllCanUnloadNow     PRIVATE
+    DllRegisterServer   PRIVATE
+    DllUnregisterServer PRIVATE

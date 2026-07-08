@@ -132,3 +132,25 @@ add_executable(CmmCli
     src/main.cpp
 )
 target_link_libraries(CmmCli PRIVATE cmm_core)
+
+# ============================================================
+#  富媒体 Shell 扩展 DLL：CmmShellExt（阶段 2 地基）
+#
+#  进程内 COM 服务器，实现 IContextMenu + IShellExtInit，注册到文件类型的
+#  shellex\ContextMenuHandlers 后由 explorer 在右键时加载。与主程序完全独立，
+#  不链 cmm_core（避免把 WebView2/注册表接管那套重依赖带进 explorer 进程）。
+#  .def 导出 COM 四函数；regsvr32 CmmShellExt.dll 注册 / regsvr32 /u 反注册。
+# ============================================================
+add_library(CmmShellExt SHARED
+    src/shellext/shellext.cpp
+    src/shellext/shellext.def
+)
+target_include_directories(CmmShellExt PRIVATE ${CMAKE_SOURCE_DIR}/src)
+if(WIN32)
+    target_link_libraries(CmmShellExt PRIVATE
+        advapi32 user32 shell32 gdi32 gdiplus ole32 oleaut32 shlwapi msimg32
+    )
+    target_compile_definitions(CmmShellExt PRIVATE
+        _WIN32_WINNT=0x0A00 UNICODE _UNICODE
+    )
+endif()
