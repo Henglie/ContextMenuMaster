@@ -276,14 +276,14 @@
   .winx-item .wi-target{ font-size:11px; color:var(--fg-muted);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .winx-item .wi-switch{ flex-shrink:0; }
-  .winx-item .wi-del{ flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;
+  .winx-item .wi-del, .sp-item .wi-del{ flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;
     width:30px; height:30px; padding:0; border-radius:var(--radius-sm);
     background:var(--glass-fill); border:1px solid var(--glass-stroke); color:var(--fg-muted);
     cursor:pointer; font-family:inherit;
     transition:transform var(--dur-fast) var(--spring), border-color var(--dur-quick), color var(--dur-quick); }
-  .winx-item .wi-del:hover{ border-color:var(--warn); color:var(--warn); }
-  .winx-item .wi-del:active{ transform:scale(.94); }
-  .winx-item .wi-del:disabled{ opacity:.4; cursor:not-allowed; }
+  .winx-item .wi-del:hover, .sp-item .wi-del:hover{ border-color:var(--warn); color:var(--warn); }
+  .winx-item .wi-del:active, .sp-item .wi-del:active{ transform:scale(.94); }
+  .winx-item .wi-del:disabled, .sp-item .wi-del:disabled{ opacity:.4; cursor:not-allowed; }
 
   /* Win+X 新增项弹层字段 / Win+X add-item modal fields */
   .winx-add-modal{ min-width:380px; }
@@ -358,14 +358,6 @@
   .spv-row .del:hover{ border-color:var(--warn); color:var(--warn); }
   .spv-row .del:disabled{ opacity:.35; cursor:not-allowed; }
   .spv-empty{ padding:10px 12px; font-size:12px; color:var(--fg-muted); }
-  .sp-item .wi-del{ flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;
-    width:30px; height:30px; padding:0; border-radius:var(--radius-sm);
-    background:var(--glass-fill); border:1px solid var(--glass-stroke); color:var(--fg-muted);
-    cursor:pointer; font-family:inherit;
-    transition:transform var(--dur-fast) var(--spring), border-color var(--dur-quick), color var(--dur-quick); }
-  .sp-item .wi-del:hover{ border-color:var(--warn); color:var(--warn); }
-  .sp-item .wi-del:active{ transform:scale(.94); }
-  .sp-item .wi-del:disabled{ opacity:.4; cursor:not-allowed; }
   .sp-sys{ margin-left:7px; font-size:10px; color:var(--fg-muted); padding:1px 6px;
     border-radius:8px; background:var(--glass-fill); border:1px solid var(--glass-stroke); }
   .sp-readonly{ flex-shrink:0; font-size:11px; color:var(--fg-muted); padding:2px 8px;
@@ -976,7 +968,7 @@
               <div v-for="it in ftItems" :key="it.id"
                    class="sp-item" :class="{disabled: !it.enabled}" :data-item-id="it.id"
                    @contextmenu.prevent.stop="openFtCtx(it, $event)"
-                   :title="t('sp.right_click_hint')">
+                   :title="t('win11.right_click_hint')">
                 <span class="wi-glyph">
                   <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
                   <span v-else>▸</span>
@@ -1032,7 +1024,7 @@
                          class="spv-group">{{ it.objectClass }}</div>
                     <div class="spv-row" :class="{disabled: !it.enabled}"
                          @contextmenu.prevent.stop="openSpCtx(it, $event)"
-                         :title="t('sp.right_click_hint')">
+                         :title="t('win11.right_click_hint')">
                       <span class="g">
                         <img v-if="it.icon" :src="it.icon" class="glyph-img" alt="" draggable="false" />
                         <span v-else>▸</span>
@@ -1781,14 +1773,14 @@
       <div class="title">{{ spEdit.mode==='rename' ? t('list.rename') : t('list.icon_btn') }}</div>
       <div class="winx-add-body">
         <label class="wa-field">
-          <span class="wa-label">{{ spEdit.mode==='rename' ? t('sp.add_name') : t('editor.f_icon') }}</span>
+          <span class="wa-label">{{ spEdit.mode==='rename' ? t('sp.add_name') : t('custom.f_icon') }}</span>
           <div v-if="spEdit.mode==='icon'" style="display:flex;gap:6px">
-            <input class="wa-input" type="text" v-model="spEdit.value" :placeholder="t('editor.f_icon_ph')" style="flex:1"
+            <input class="wa-input" type="text" v-model="spEdit.value" :placeholder="t('custom.f_icon_ph')" style="flex:1"
                    @keyup.enter="spEditCommit" />
             <button type="button" class="btn sm" @click="pickImageFor('spEdit','value')" :disabled="busy">{{ t('custom.pick_image') }}</button>
           </div>
           <input v-else class="wa-input" type="text" v-model="spEdit.value"
-                 :placeholder="spEdit.mode==='rename' ? t('sp.add_name_ph') : t('editor.f_icon_ph')"
+                 :placeholder="spEdit.mode==='rename' ? t('sp.add_name_ph') : t('custom.f_icon_ph')"
                  @keyup.enter="spEditCommit" />
         </label>
       </div>
@@ -1880,6 +1872,7 @@ const i18n = {
       empty:'该扩展名下未发现可管理的右键菜单项。',
       need_ext:'请输入扩展名（如 .txt）',
       add_title:'新增文件类型右键项（写当前用户）',
+      edit_title:'编辑文件类型右键项',
       add_ok:'新增成功', del_title:'删除自建项', del_ok:'已删除',
       del_desc:'确定删除「{name}」？此项由本工具创建（当前用户层），将从注册表移除，不影响系统关联。',
       root_ext:'扩展名', root_progid:'ProgID', root_sfaext:'系统关联', root_sfaperceived:'感知类型',
@@ -2055,6 +2048,20 @@ const i18n = {
       del_title:'刪除此項目', del_desc:'確定刪除「{name}」？檔案將送到資源回收筒，可還原。',
       del_desc_ow:'確定刪除「{name}」？該項會搬到 <b>.deleted</b> 備份鍵，可手動還原（僅限使用者自訂項）。',
       del_ok:'已刪除（送資源回收筒）',
+    },
+    ft:{
+      slogan:'管理某個具體副檔名的右鍵選單項。先輸入副檔名（如 .txt / .jpg / .zip）掃描，聚合四類登錄檔根：副檔名直掛、ProgID 關聯、SystemFileAssociations\\.ext、感知類型。啟停可逆（verb 加 LegacyDisable / handler 搬家），自建項寫目前使用者，寫入前自動備份。',
+      ext_ph:'輸入副檔名，如 .txt / .jpg / .zip', scan:'掃描', add:'新增項', backup:'備份此類型',
+      ext:'副檔名', perceived:'感知類型',
+      prompt:'輸入一個副檔名後點「掃描」，檢視並管理該檔案類型的右鍵選單項。',
+      bad_ext:'副檔名非法（需以點開頭、不含空格或路徑分隔符）。',
+      empty:'該副檔名下未發現可管理的右鍵選單項。',
+      need_ext:'請輸入副檔名（如 .txt）',
+      add_title:'新增檔案類型右鍵項（寫目前使用者）',
+      edit_title:'編輯檔案類型右鍵項',
+      add_ok:'新增成功', del_title:'刪除自建項', del_ok:'已刪除',
+      del_desc:'確定刪除「{name}」？此項由本工具建立（目前使用者層），將從登錄檔移除，不影響系統關聯。',
+      root_ext:'副檔名', root_progid:'ProgID', root_sfaext:'系統關聯', root_sfaperceived:'感知類型',
     },
     search:{
       placeholder:'搜尋所有右鍵選單項…',
@@ -2242,6 +2249,7 @@ const i18n = {
       empty:'No manageable right-click menu items found for this extension.',
       need_ext:'Please enter an extension (e.g. .txt)',
       add_title:'Add a file-type item (written to current user)',
+      edit_title:'Edit custom file-type item',
       add_ok:'Added', del_title:'Delete custom item', del_ok:'Deleted',
       del_desc:'Delete "{name}"? This item was created by this tool (current-user layer) and will be removed from the registry; system associations are unaffected.',
       root_ext:'Extension', root_progid:'ProgID', root_sfaext:'System assoc', root_sfaperceived:'Perceived',
@@ -2440,14 +2448,8 @@ const app = createApp({
 
       tab: 'editor',
       // 版本号与 CMake project(VERSION) 保持一致；页脚与关于页共用。
-      appVersion: '0.2beta',
+      appVersion: '0.5',
       repoUrl: 'https://github.com/Henglie/ContextMenuMaster',
-      // 顶层「页面」项（Win11 专区 / 关于）—— 场景不在此，场景已平铺到顶层单列。
-      // Top-level page items (peer to the flattened scene list above them).
-      pageItems: [
-        // Win11 专区已置顶单独渲染，此处只留关于。/ Win11 zone pinned above; only About here.
-        { key:'about',  ic:'◔' },
-      ],
 
       // 6 场景 / 6 scenes —— 后端 sceneId 与此一一对应。
       scenes: [
@@ -2482,8 +2484,6 @@ const app = createApp({
       searchOpen: false,      // 结果下拉是否展开
       searchIndex: [],        // [{scene, sceneKind, id, label, target, command, clsid, kind}]
       searchIndexReady: false, // prefetchCounts 建完索引置 true
-      searchJumpId: null,     // 搜索跳转后待高亮定位的项 id
-      searchHilite: null,     // 跳转后高亮的项 id（短暂）
 
       // Win+X 场景（文件系统机制，非注册表）。分组数据由 scan_winx 拉，组已倒序。
       // Win+X scene state. Groups come from scan_winx (already reversed).
@@ -2511,6 +2511,7 @@ const app = createApp({
       view: 'visual',          // visual（可视化双菜单并排）/ list（列表）
       win11View: 'visual',   // Win11 专区默认可视化视图
       richPreview: { loading:false, path:'', name:'', dataUri:'', error:false },  // 富媒体预览面板
+      _probeCache: {},         // COM handler 动态子菜单探测结果缓存（按 clsid），null 也缓存避免反复空探
       items: [],               // 当前场景的菜单项（含 _checked / icon 临时字段）
       loading: false,
       busy: false,
@@ -2535,10 +2536,6 @@ const app = createApp({
 
       magicSuffix: '',
       magicPresets: [' 喵~', ' ★', ' (新)'],
-
-      // 自建菜单项编辑器（差异化核心）。cx.show 控制弹层；editId 空=新建、非空=编辑既有项。
-      // kind: program/folder/url/command。三语文案与执行模板见后端 custom_menu。
-      cx: { show:false, editId:null, label:'', kind:'program', target:'', icon:'', position:'' },
 
       menuStatus: { classic: false },
 
@@ -2581,16 +2578,6 @@ const app = createApp({
       }
       return { packaged, system };
     },
-    // Win11 可视化预览用：模拟真实现代菜单外观。系统固定项（复制/粘贴等工具条）
-    // 与共享按钮由 shell 内建，这里只把用户可控的 packaged 项按启停呈现——启用项
-    // 正常显示，停用项灰显划掉，直观反映「封锁了哪些、菜单里少了哪些」。
-    win11PreviewItems() {
-      return this.win11Grouped.packaged.map(it => ({
-        id: it.id, label: it.label, icon: it.icon,
-        enabled: it.enabled, contextTypes: it.contextTypes,
-      }));
-    },
-
     // Win+X 新增项可选目标组：现有分组并 Group1~3（去重，Group3 在前与菜单一致）。
     // Groups available when adding a Win+X item: existing groups ∪ Group1~3.
     winxAddGroups() {
@@ -2604,16 +2591,6 @@ const app = createApp({
     // Whether the current scene is a special-menu scene (own bind + flat list).
     isSpecialScene() {
       return this.specialScenes.some(s => s.id === this.scene);
-    },
-    // 当前特殊场景的后端 bind 前缀映射（scan_<x> / set_<x>_enabled）。
-    spBind() {
-      const map = {
-        sendto:   { scan:'scan_sendto',   toggle:'set_sendto_enabled' },
-        dragdrop: { scan:'scan_dragdrop', toggle:'set_dragdrop_enabled' },
-        shellnew: { scan:'scan_shellnew', toggle:'set_shellnew_enabled' },
-        openwith: { scan:'scan_openwith', toggle:null },
-      };
-      return map[this.scene] || null;
     },
     // 当前特殊场景是否支持新增项（sendto / openwith / shellnew）。
     spCanAdd() { return this.scene === 'sendto' || this.scene === 'openwith' || this.scene === 'shellnew'; },
@@ -2637,9 +2614,6 @@ const app = createApp({
       }
       return out;
     },
-    // 当前特殊场景是否支持启停（openwith 只读）。
-    spCanToggle() { return this.scene !== 'openwith'; },
-
     // 现代菜单（Win11 新菜单）只读示意项。**关键事实**：现代菜单只枚举 shell 内建命令
     // + 云提供程序命令 + 满足 IExplorerCommand 且有包标识（稀疏包/MSIX）的扩展；
     // 传统注册表项（shell\verb、shellex\ContextMenuHandlers）进不了现代菜单，
@@ -2960,7 +2934,6 @@ const app = createApp({
         } catch (e) { /* 静默 */ }
       }));
     },
-    async reloadSpecial() { await this.loadSpecial(this.scene); },
     // 特殊场景启停：调 set_<id>_enabled(itemId, next)，可逆即时。
     async spToggle(it) {
       const id = this.scene;
@@ -3177,41 +3150,12 @@ const app = createApp({
         } catch (e) { /* 忽略 */ }
       }
       this.searchIndex = index;
-      this.searchIndexReady = true;
     },
 
     // —— 全局搜索 —— 基于 searchIndex 内存匹配（不访问后端）。忽略标点/大小写。
     // Global search over the in-memory index (no backend hit). Punctuation-insensitive.
-    normalizeSearch(s) {
-      return (s || '').toLowerCase().replace(/[\s\-_.&()（）［］\[\]]+/g, '');
-    },
     closeSearch() { this.searchOpen = false; },
     // 回车：直接跳到第一条结果（若有）。
-    searchEnter() {
-      if (this.searchResults.length) this.gotoSearchResult(this.searchResults[0]);
-    },
-    // 点击结果：切到对应场景 + 高亮定位该项。特殊场景/注册表场景分别路由。
-    gotoSearchResult(r) {
-      this.searchOpen = false;
-      this.search = '';
-      this.searchJumpId = r.id;   // 目标场景加载后据此高亮
-      this.selectScene(r.scene);
-      // 3 秒后清除高亮标记。
-      setTimeout(() => { if (this.searchJumpId === r.id) this.searchJumpId = null; }, 3200);
-    },
-    // 场景 id → 本地化显示名（搜索结果里标来源场景）。
-    sceneDisplayName(id) { return this.t('scene.' + id); },
-    // 把 label 里命中搜索词的片段高亮（忽略标点匹配，故按原串找子串近似高亮）。
-    highlightMatch(label) {
-      const q = (this.search || '').trim();
-      if (!q) return this.escapeHtml(label || '');
-      const raw = label || '';
-      const idx = raw.toLowerCase().indexOf(q.toLowerCase());
-      if (idx < 0) return this.escapeHtml(raw);
-      return this.escapeHtml(raw.slice(0, idx)) +
-        '<mark class="s-hl">' + this.escapeHtml(raw.slice(idx, idx + q.length)) + '</mark>' +
-        this.escapeHtml(raw.slice(idx + q.length));
-    },
     searchEnter() {
       if (this.searchResults.length) this.gotoSearchResult(this.searchResults[0]);
     },
@@ -3234,7 +3178,6 @@ const app = createApp({
     gotoSearchResult(r) {
       this.searchOpen = false;
       this.search = '';
-      this._searchJumpTo = { scene: r.scene, id: r.id };
       this.selectScene(r.scene);
       // 跳转后滚动到该项并短暂高亮（等场景数据加载）。
       this.$nextTick(() => {
@@ -3245,8 +3188,8 @@ const app = createApp({
       const el = document.querySelector('[data-item-id="' + (CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
       if (el) {
         el.scrollIntoView({ block:'center', behavior:'smooth' });
-        el.classList.add('search-flash');
-        setTimeout(() => el.classList.remove('search-flash'), 1600);
+        el.classList.add('search-hit-flash');
+        setTimeout(() => el.classList.remove('search-hit-flash'), 1600);
       }
     },
 

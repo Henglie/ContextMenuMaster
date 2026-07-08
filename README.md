@@ -97,15 +97,35 @@ cmake --build build/release
 ```
 ContextMenuMaster/
 ├── CMakeLists.txt              CMake 主配置（≈ .sln，含 /utf-8 /EHsc + Release 瘦身）
-├── CMakePresets.json           VS 一键识别（windows-debug / release / release-x86）
+├── CMakePresets.json           VS 一键识别（windows-debug / release / release-x86 / release-arm64）
 ├── src/
 │   ├── main.cpp                CLI 调试入口（CmmCli）
-│   ├── app/gui_main.cpp        GUI 入口 WinMain：webview 窗口 + 绑定 + 语言注入
-│   └── platform/windows/
-│       ├── i18n.{h,cpp}        系统语言检测（zh-CN / zh-TW / en）
-│       └── context_menu.{h,cpp} Win11 经典↔新版菜单接管 + 优雅重启 Explorer
+│   ├── app/
+│   │   ├── gui_main.cpp        GUI 入口 WinMain：webview 窗口 + bind + 语言注入
+│   │   └── app.manifest        UAC requireAdministrator 提权清单
+│   ├── platform/windows/       Win32 特权层（每个右键场景一个模块）
+│   │   ├── i18n.{h,cpp}          系统语言检测（zh-CN / zh-TW / en）
+│   │   ├── context_menu.{h,cpp}  Win11 经典↔新版菜单接管 + 优雅重启 Explorer
+│   │   ├── menu_scanner.{h,cpp}  注册表场景扫描 + 改名/图标/启停/批量后缀
+│   │   ├── icon_extract.{h,cpp}  系统图标/资源/.ico → PNG base64 data URI
+│   │   ├── image_icon.{h,cpp}    任意图片 → 多尺寸 PNG-in-ICO（富媒体阶段 1）
+│   │   ├── com_menu_probe.{h,cpp} IContextMenu COM 扩展动态菜单探测
+│   │   ├── win11menu.{h,cpp}     Win11 现代菜单（PackagedCom / SystemCommandStore）
+│   │   ├── winx_menu.{h,cpp}     Win+X 菜单（文件系统 .lnk + hash）
+│   │   ├── sendto_menu.{h,cpp}   发送到子菜单
+│   │   ├── shellnew_menu.{h,cpp} 新建子菜单
+│   │   ├── dragdrop_menu.{h,cpp} 拖放处理程序
+│   │   ├── openwith_menu.{h,cpp} 打开方式
+│   │   ├── custom_menu.{h,cpp}   自建右键菜单项
+│   │   └── filetype_menu.{h,cpp} 按扩展名管理文件类型右键项
+│   └── shellext/               富媒体 Shell 扩展 DLL（阶段 2，独立不链 cmm_core）
+│       ├── shellext.cpp          IContextMenu 进程内 COM 服务器 + owner-draw 缩略图
+│       └── shellext.def          COM 四导出
 ├── third_party/                webview 单头库 + WebView2 SDK
-└── ui/index.html               单文件 Vue3 应用（液态玻璃皮肤 + 三语 i18n）
+└── ui/
+    ├── index.html              单文件 Vue3 应用（液态玻璃皮肤 + 三语 i18n）
+    ├── vue.global.js           Vue 3 运行时（本地）
+    └── liquidGlass.js          液态玻璃辅助
 ```
 
 ---
@@ -121,7 +141,7 @@ ContextMenuMaster/
 
 ## 下载
 
-- 预编译版（x64）见 [Releases](https://github.com/Henglie/ContextMenuMaster/releases)：下载 zip 解压，双击 `ContextMenuMaster.exe` 即用，无需安装。
+- 预编译版见 [Releases](https://github.com/Henglie/ContextMenuMaster/releases)：按 CPU 架构选 zip（x64 / x86 / arm64），解压后双击 `ContextMenuMaster.exe` 即用，无需安装。绝大多数电脑选 x64。
 - 需 WebView2 运行时（Windows 10/11 自带）。
 
 ---
@@ -129,6 +149,6 @@ ContextMenuMaster/
 ## 许可与作者
 
 - **作者**：恒烈 (EternalBlaze / Henglie)
-- **版本**：v0.2beta
+- **版本**：v0.5
 - **项目主页**：<https://github.com/Henglie/ContextMenuMaster>
 - **协议**：MIT
