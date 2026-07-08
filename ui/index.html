@@ -1679,6 +1679,52 @@
     </div>
   </div>
 
+  <!-- 自建右键项 新建/编辑 弹层 / custom item add/edit modal -->
+  <div v-if="customEdit.show" class="modal-mask" @click.self="customCancel">
+    <div class="modal winx-add-modal">
+      <div class="title">{{ customEdit.mode === 'edit' ? t('custom.edit_title') : t('custom.add_title') }}</div>
+      <div class="winx-add-body">
+        <label class="wa-field">
+          <span class="wa-label">{{ t('custom.f_label') }}</span>
+          <input class="wa-input" type="text" v-model="customEdit.label" :placeholder="t('custom.f_label_ph')" />
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('custom.f_kind') }}</span>
+          <select class="wa-input" v-model="customEdit.kind">
+            <option value="program">{{ t('custom.kind_program') }}</option>
+            <option value="folder">{{ t('custom.kind_folder') }}</option>
+            <option value="url">{{ t('custom.kind_url') }}</option>
+            <option value="command">{{ t('custom.kind_command') }}</option>
+          </select>
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('custom.f_target') }}</span>
+          <input class="wa-input" type="text" v-model="customEdit.target"
+                 :placeholder="customEdit.kind==='url' ? t('custom.f_target_url_ph') : t('custom.f_target_ph')" />
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('custom.f_icon') }}</span>
+          <div style="display:flex;gap:6px">
+            <input class="wa-input" type="text" v-model="customEdit.icon" :placeholder="t('custom.f_icon_ph')" style="flex:1" />
+            <button type="button" class="btn sm" @click="pickImageFor('customEdit')" :disabled="busy">{{ t('custom.pick_image') }}</button>
+          </div>
+        </label>
+        <label class="wa-field">
+          <span class="wa-label">{{ t('custom.f_position') }}</span>
+          <select class="wa-input" v-model="customEdit.position">
+            <option value="">{{ t('custom.pos_default') }}</option>
+            <option value="top">{{ t('custom.pos_top') }}</option>
+            <option value="bottom">{{ t('custom.pos_bottom') }}</option>
+          </select>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn" @click="customCancel">{{ t('common.cancel') }}</button>
+        <button class="btn primary" :disabled="busy" @click="customCommit">{{ t('common.confirm') }}</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 「发送到」改名 / 换图标弹层 / Send-to rename / set-icon modal -->
   <div v-if="spEdit.show" class="modal-mask" @click.self="spEditCancel">
     <div class="modal winx-add-modal">
@@ -2372,6 +2418,7 @@ const app = createApp({
       ftItems: [],
       ftLoading: false,
       ftAdd: { show:false, mode:'add', id:'', label:'', kind:'program', target:'', icon:'', position:'' },
+      customEdit: { show:false, mode:'add', id:null, label:'', kind:'program', target:'', icon:'', position:'' },
 
       view: 'visual',          // visual（可视化双菜单并排）/ list（列表）
       win11View: 'visual',   // Win11 专区默认可视化视图
@@ -3639,7 +3686,7 @@ const app = createApp({
       };
     },
     // 富媒体阶段 1：弹文件选择框挑图片 → 转多尺寸 .ico → 回填到指定弹层的 icon 字段。
-    // which 为弹层 state 名（'ftAdd'；将来 customEdit modal 建好后可传 'customEdit'）。
+    // which 为弹层 state 名（'ftAdd' 或 'customEdit'）。
     async pickImageFor(which) {
       const pick = await this.callBackend('pick_image_file');
       if (!pick || !pick.ok) return;  // 用户取消

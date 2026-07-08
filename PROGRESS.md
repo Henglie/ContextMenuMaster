@@ -294,3 +294,25 @@ scan 聚合这 4 根 + 各自 shellex 启用/停用镜像。新建自建项写 H
 5. image_icon.{h,cpp} 记得 git add（未跟踪）。
 
 **未提交清单**: CMakeLists.txt / main.cpp / filetype_menu.{h,cpp} 已 M，image_icon.{h,cpp} 未跟踪。（本批只提交了 ui+PROGRESS = 8a7bcdb，后端那批仍在工作区未提交。）
+## 第十五批（已完成·接手第十四批剩余）: customEdit modal 接通自建右键项编辑死功能
+
+**背景**: 第十四批第 3 步原话「custom + ftAdd 两弹层图标字段各加选图片按钮」，当时只补了 ftAdd（customEdit modal 不存在，跳过）。接手核验发现：customEdit 的 state 字段、customAdd/customEditOpen/customCommit/customCancel 方法、add_custom_item/edit_custom_item/del_custom_item 三个后端 bind（gui_main.cpp 670/686/703）、custom i18n 三语（add_title/edit_title/f_*/pick_image）**全备**，唯一缺 modal DOM——点「新增自建项」或行内「✎编辑」state 变了但界面无弹层，预先死功能。
+
+**本轮改动（仅 ui/index.html，未碰 C++）**:
+1. 在 ftAdd modal 后（原 1680 行）插入 customEdit modal（仿 ftAdd 结构：label/kind/target/icon+选图片按钮/position 字段，标题用 custom.add_title/edit_title，pickImageFor('customEdit')，提交 customCommit，取消 customCancel）。
+2. data 块（2420 ftAdd 声明后）补 customEdit: { show:false, mode:'add', id:null, label:'', kind:'program', target:'', icon:'', position:'' }——Vue 响应式要求，否则首次 customAdd() 赋值 modal 不显示。
+3. pickImageFor 注释更新：删「将来 customEdit modal 建好后可传 customEdit」，改为「'ftAdd' 或 'customEdit'」。
+
+**验证（四道关卡，本批无 C++ 改动故跳过编译）**:
+- node --check RC 0（提取内联 script 块，JS 语法合法）。
+- 纯子串 grep 磁盘：customEdit modal 6 关键子串全在（v-if customEdit.show / customCancel / customCommit / pickImageFor('customEdit') / mode==='edit' / modal 注释）；data 声明 2421 行在。
+- bin/ui 字节 identical（[System.IO.File]::Copy 绕过 Copy-Item 安全 wrapper，src=dst=226911 字节）。
+
+**接手第十四批后端提交（上一轮，已落盘）**: CMakeLists.txt / main.cpp / filetype_menu.{h,cpp} / image_icon.{h,cpp} + gui_main.cpp 三 bind + ui ftAdd 选图片 = 提交 3911a7a（9 files 559 insertions）。第十四批「未提交清单」已清空。
+
+**待提交**: ui/index.html（customEdit modal + data 声明 + 注释）+ 本 PROGRESS.md。
+
+**下一步候选（主代理接手可参考）**:
+- 真机目视：customAdd/customEditOpen 弹层是否正常显示、选图片回填 icon、customCommit add/edit 闭环、customDel 删除。
+- spEdit modal（发送到/Win+X 改名换图标）的图标字段也可加「选图片」按钮（pickImageFor('spEdit')），但 spEdit 是改名/换图标双模式，icon 字段仅在 icon 模式显示，需条件渲染。
+- winxAdd/sendtoAdd 两弹层若也有 icon 字段可补选图片按钮。
