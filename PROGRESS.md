@@ -334,3 +334,36 @@ scan 聚合这 4 根 + 各自 shellex 启用/停用镜像。新建自建项写 H
 **教训（本批再遇假提交）**: 一次 git commit 工具回执报 [main a3f7c2e] 2 files changed 成功，但 git log 顶部仍是 0cdf8f2、SHA a3f7c2e rev-parse unknown、ui/index.html 仍 M → 那次提交根本没发生。再次印证：提交只信 git log 顶部 SHA + git status，不信 commit 回执。
 
 **待提交**: ui/index.html（spEdit 选图片 + pickImageFor field 参）+ 本 PROGRESS.md。
+
+
+## 第十七批（已完成·阶段2富媒体COM DLL地基一次写全，未真机测）: IContextMenu 进程内扩展
+
+**背景**: 阶段2是**生产端**（造自己的 IContextMenu DLL），与 com_menu_probe（探测别人的扩展、消费端）代码零复用，别混。恒烈拍板「先全写完，以后再测」。
+
+**新增文件**:
+- src/shellext/shellext.h : CLSID_CmmShellExt {A7E4C9F1-3D82-4B6E-9C15-2F8A6D5E1B93} extern 声明（实体在 .cpp，DEFINE_GUID 只 extern 会 LNK2001 踩坑）、handler 名/友好名宏、全局 refcount/hinstance extern。
+- src/shellext/shellext.cpp : CCmmContextMenu(IShellExtInit+IContextMenu3) + CClassFactory + DLL 四导出 + DllMain。三步全含。
+- src/shellext/shellext.def : 四导出 PRIVATE。
+- CMakeLists.txt : add_library(CmmShellExt SHARED)，独立不链 cmm_core（避免 WebView2 重依赖进 explorer），链 msimg32(AlphaBlend)。
+
+**三步实现**:
+- step1 地基: Initialize 取 CF_HDROP 路径 → QueryContextMenu 塞项 → InvokeCommand 回显。
+- step2 owner-draw: 顶层项 MFT_OWNERDRAW + dwItemData=this；HandleMenuMsg2 处理 WM_MEASUREITEM/WM_DRAWITEM；make_thumbnail 图片走 IShellItemImageFactory 抽真实缩略图、非图片回退 SHGetFileInfo 大图标；AlphaBlend 保 alpha、选中 COLOR_HIGHLIGHT。
+- step3 动态子菜单: 单文件且目录→list_folder_entries(FindFirstFile)；压缩包→list_archive_entries(BindToHandler BHID_StorageEnum)；最多 kMaxSubItems=20。子项 id = idCmdFirst+1+i，InvokeCommand 按 offset 分派。
+- 注册闭环: DllRegisterServer 写 CLSID\InprocServer32(Apartment) + 挂 HKCR\*\shellex\ContextMenuHandlers\<name>；DllUnregisterServer 反向摘 + RegDeleteTree；SHChangeNotify 刷新。**regsvr32 CmmShellExt.dll 一条命令全装，/u 全卸**，无需额外 CLI。
+
+**验证（客观关卡，无真机）**:
+- 编译链接 RC 0（build/debug/bin/CmmShellExt.dll 595968 字节）。
+- dumpbin /exports 四导出齐全（DllGetClassObject/CanUnloadNow/Register/Unregister）。
+- 纯子串核验：MFT_OWNERDRAW/onDrawItem/onMeasureItem/list_archive_entries/list_folder_entries/make_thumbnail/AlphaBlend/ContextMenuHandlers 全在，HKEY_CLASES_ROOT 拼错 0 次。
+- 提交 4e42590，工作区干净。
+
+**真机待测（恒烈以后测，有系统副作用需管理员+重启explorer）**:
+1. 管理员 regsvr32 build\debugin\CmmShellExt.dll → 重启 explorer（或注销）。
+2. 右键任意文件：应出「ContextMenuMaster」项，**左侧带缩略图**（图片显真实缩略图/其他显大图标），点击弹路径框。
+3. 右键文件夹/zip：顶层项应带**子菜单**列出内容（≤20 条），点子项弹「打开内容项」。
+4. **Win11 硬限制**：owner-draw 缩略图只在经典层（Shift+右键/显示更多选项）出；现代菜单只文本+单色图标。这是微软限制，非 bug。
+5. regsvr32 /u 应完整卸载（* handler + CLSID 子树全清）。
+6. **⚠ 风险点**: 挂 * = 全类型加载本 DLL 进 explorer，崩则右键卡；step3 list_archive_entries 对超大压缩包可能慢（同步枚举，未设超时）。生产应改挂具体类型、子菜单枚举加线程/超时护栏。
+
+**下一步候选**: ① 真机验证上述 6 点；② GUI 接入（扫描本扩展注册状态、一键装卸开关）；③ 皮肤系统（owner-draw 配色/圆角预设 .cmmskin）；④ 挂载类型收窄 + 枚举超时护栏。
