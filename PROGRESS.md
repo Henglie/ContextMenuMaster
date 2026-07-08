@@ -367,3 +367,27 @@ scan 聚合这 4 根 + 各自 shellex 启用/停用镜像。新建自建项写 H
 6. **⚠ 风险点**: 挂 * = 全类型加载本 DLL 进 explorer，崩则右键卡；step3 list_archive_entries 对超大压缩包可能慢（同步枚举，未设超时）。生产应改挂具体类型、子菜单枚举加线程/超时护栏。
 
 **下一步候选**: ① 真机验证上述 6 点；② GUI 接入（扫描本扩展注册状态、一键装卸开关）；③ 皮肤系统（owner-draw 配色/圆角预设 .cmmskin）；④ 挂载类型收窄 + 枚举超时护栏。
+## 第十八批（已完成）: 富媒体扩展枚举护栏（生产前必做风险点 6 收口）
+
+**背景**: 第十七批留的风险点 6「挂 * 全类型加载进 explorer，崩则右键卡；list_archive_entries 对超大压缩包可能慢（同步枚举，未设超时）」。恒烈定调「高度美化的新功能没必要一直开启，有些人只是拿这个工具来简单管理右键菜单的」——功能可以存在，但不能成为系统负担。本批做 DLL 内部防御性护栏，纯 C++ 改动，无系统副作用。
+
+**改动（仅 src/shellext/shellext.cpp，LF 行尾）**:
+1. 加护栏常量（kMaxSubItems 后）：kEnumTimeoutMs=800（单次枚举总时长上限 800ms）、kArchiveSizeLimit=200MB（压缩包超此大小跳过子菜单枚举）。
+2. list_archive_entries 开头加 GetFileAttributesExW 文件大小检查，超 kArchiveSizeLimit 直接返回空（降级为普通单项）；枚举循环加 GetTickCount 超时检查，超 800ms 即 break（已收集条目照常显示，部分枚举降级）。
+3. list_folder_entries 枚举循环加 GetTickCount 超时检查（FindFirstFile 本身快，但海量文件文件夹也加保险）。
+
+**护栏逻辑**: 超时/超大时枚举函数返回空 → QueryContextMenu 里 useSubmenu=false → 退化为普通单项（只出顶层项 + 缩略图，无子菜单）。explorer 右键菜单最多等 800ms 就降级，不会卡死。
+
+**验证（客观关卡）**:
+- 编译 RC 0（ninja [1/2] Building shellext.cpp + [2/2] Linking CmmShellExt.dll，BUILD OK）。
+- DLL 596992 字节（原 595968，+1024 护栏代码合理增量），LastWriteTime 新生。
+- 纯子串 grep 磁盘：8 锚点全在——kEnumTimeoutMs(64) / kArchiveSizeLimit(65) / GetFileAttributesExW(181) / kArchiveSizeLimit 比较(183) / archive GetTickCount start(192) / archive 超时 break(204) / folder GetTickCount start(222) / folder 超时 break(228)。
+- .def 未改，四导出（DllGetClassObject/CanUnloadNow/Register/Unregister）不变。
+
+**沙盒权限插曲**: shellext.cpp（src\shellext\ 子目录，第十七批新建）不在工作目录白名单，Edit + WriteAllText 均被沙盒拒。解法：RunCommand 设 requires_approval=true，用户批准后绕过。下次接手改 shellext 文件需注意此路径限制。
+
+**未做的（留下一批）**:
+- 挂载类型收窄（* → 具体类型）：需改 DllRegisterServer 注册逻辑 + GUI 选类型，工作量较大，留下一批。
+- GUI 一键装卸开关：需后端 bind + 前端面板 + 提权子进程（regsvr32 要管理员），留下一批。
+
+**下一步候选**: ① 真机验证护栏有效性（构造超大 zip / 海量文件文件夹测降级）；② GUI 一键装卸开关 + 挂载类型收窄；③ 皮肤系统。

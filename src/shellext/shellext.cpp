@@ -59,6 +59,11 @@ constexpr int kTextMinW    = 160;  // 文字区最小宽（保证够长文件名
 // step 3 动态子菜单：最多列出多少条内容，超出显示省略项。
 constexpr int kMaxSubItems = 20;
 
+// 护栏：枚举超时与压缩包大小上限。explorer 在 UI 线程同步调 QueryContextMenu，
+// 超时必须降级为不枚举子菜单，否则右键菜单会卡住（生产前必做，见 PROGRESS 风险点 6）。
+constexpr DWORD kEnumTimeoutMs    = 800;              // 单次枚举总时长上限
+constexpr ULONGLONG kArchiveSizeLimit = 200ULL * 1024 * 1024;  // 压缩包超 200MB 跳过子菜单
+
 // -------- CLSID -> 注册表字符串 "{...}" --------
 std::wstring clsid_to_wstring(REFCLSID clsid) {
     LPOLESTR s = nullptr;
@@ -171,6 +176,12 @@ HBITMAP make_thumbnail(const std::wstring& path, int size) {
 //  失败或非可枚举返回空。只取顶层若干条。
 std::vector<std::wstring> list_archive_entries(const std::wstring& path, int maxN) {
     std::vector<std::wstring> out;
+    // 护栏：超大压缩包跳过枚举（系统解压索引可能数秒，会卡住 explorer 右键菜单）。
+    WIN32_FILE_ATTRIBUTE_DATA fad = {};
+    if (GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &fad)) {
+        ULONGLONG sz = ((ULONGLONG)fad.nFileSizeHigh << 32) | fad.nFileSizeLow;
+        if (sz > kArchiveSizeLimit) return out;
+    }
     IShellItem* item = nullptr;
     if (FAILED(SHCreateItemFromParsingName(path.c_str(), nullptr, IID_PPV_ARGS(&item))) || !item)
         return out;
@@ -178,6 +189,7 @@ std::vector<std::wstring> list_archive_entries(const std::wstring& path, int max
     IEnumShellItems* en = nullptr;
     // BindToHandler(BHID_StorageEnum) 把压缩包当作可枚举容器（系统 zip 支持）。
     if (SUCCEEDED(item->BindToHandler(nullptr, BHID_StorageEnum, IID_PPV_ARGS(&en))) && en) {
+        DWORD start = GetTickCount();
         IShellItem* child = nullptr;
         while (out.size() < static_cast<size_t>(maxN) &&
                en->Next(1, &child, nullptr) == S_OK && child) {
@@ -188,6 +200,8 @@ std::vector<std::wstring> list_archive_entries(const std::wstring& path, int max
             }
             child->Release();
             child = nullptr;
+            // 护栏：超时即停（已收集的条目照常显示，降级部分枚举）。
+            if (GetTickCount() - start > kEnumTimeoutMs) break;
         }
         en->Release();
     }
@@ -205,10 +219,13 @@ std::vector<std::wstring> list_folder_entries(const std::wstring& dir, int maxN)
     WIN32_FIND_DATAW fd = {};
     HANDLE h = FindFirstFileW(pat.c_str(), &fd);
     if (h == INVALID_HANDLE_VALUE) return out;
+    DWORD start = GetTickCount();
     do {
         if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
         out.emplace_back(fd.cFileName);
         if (out.size() >= static_cast<size_t>(maxN)) break;
+        // 护栏：超时即停（海量文件文件夹降级部分枚举）。
+        if (GetTickCount() - start > kEnumTimeoutMs) break;
     } while (FindNextFileW(h, &fd));
     FindClose(h);
     return out;
