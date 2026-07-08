@@ -1732,7 +1732,12 @@
       <div class="winx-add-body">
         <label class="wa-field">
           <span class="wa-label">{{ spEdit.mode==='rename' ? t('sp.add_name') : t('editor.f_icon') }}</span>
-          <input class="wa-input" type="text" v-model="spEdit.value"
+          <div v-if="spEdit.mode==='icon'" style="display:flex;gap:6px">
+            <input class="wa-input" type="text" v-model="spEdit.value" :placeholder="t('editor.f_icon_ph')" style="flex:1"
+                   @keyup.enter="spEditCommit" />
+            <button type="button" class="btn sm" @click="pickImageFor('spEdit','value')" :disabled="busy">{{ t('custom.pick_image') }}</button>
+          </div>
+          <input v-else class="wa-input" type="text" v-model="spEdit.value"
                  :placeholder="spEdit.mode==='rename' ? t('sp.add_name_ph') : t('editor.f_icon_ph')"
                  @keyup.enter="spEditCommit" />
         </label>
@@ -3686,13 +3691,15 @@ const app = createApp({
       };
     },
     // 富媒体阶段 1：弹文件选择框挑图片 → 转多尺寸 .ico → 回填到指定弹层的 icon 字段。
-    // which 为弹层 state 名（'ftAdd' 或 'customEdit'）。
-    async pickImageFor(which) {
+    // which 为弹层 state 名（'ftAdd' / 'customEdit' / 'spEdit'）。
+    // field 为回填字段名，默认 'icon'；spEdit 图标存在 value 字段故传 'value'。
+    async pickImageFor(which, field) {
+      const key = field || 'icon';
       const pick = await this.callBackend('pick_image_file');
       if (!pick || !pick.ok) return;  // 用户取消
       const r = await this.callBackend('convert_image_to_icon', pick.path);
       if (r && r.ok) {
-        this[which].icon = r.path;
+        this[which][key] = r.path;
         this.showToast(this.t('toast.icon_converted'), 'ok');
       } else {
         this.showToast(this.t('toast.icon_convert_failed'), 'err');

@@ -316,3 +316,21 @@ scan 聚合这 4 根 + 各自 shellex 启用/停用镜像。新建自建项写 H
 - 真机目视：customAdd/customEditOpen 弹层是否正常显示、选图片回填 icon、customCommit add/edit 闭环、customDel 删除。
 - spEdit modal（发送到/Win+X 改名换图标）的图标字段也可加「选图片」按钮（pickImageFor('spEdit')），但 spEdit 是改名/换图标双模式，icon 字段仅在 icon 模式显示，需条件渲染。
 - winxAdd/sendtoAdd 两弹层若也有 icon 字段可补选图片按钮。
+
+
+## 第十六批（已完成·接手第十五批下一步候选）: spEdit 换图标弹层接入选图片
+
+**背景**: 第十五批下一步候选之一——spEdit（发送到/Win+X 改名换图标双模式）的 icon 字段加选图片按钮。spEdit 图标存在 spEdit.value（非 .icon），且 icon 字段仅在 icon 模式该显示，rename 模式不该有选图片按钮。winxAdd/sendtoAdd 经核验无 icon 字段（图标从 target 程序自动取），无需补。
+
+**本轮改动（仅 ui/index.html，未碰 C++）**:
+1. pickImageFor(which) → pickImageFor(which, field)：加可选回填字段参，key = field || icon，this[which][key] = r.path。兼容 ftAdd/customEdit（不传 field 走 icon），spEdit 传 value。
+2. spEdit modal：icon 模式（v-if spEdit.mode===icon）用 flex 容器包 input + 选图片按钮（pickImageFor(spEdit,value)），rename 模式走 v-else 普通 input（原样）。
+
+**验证（四道关卡，本批无 C++ 改动故跳过编译）**:
+- 纯子串 grep 磁盘：pickImageFor which,field def 1 / spEdit pickImageFor value 1 / this[which][key] 1 / spEdit icon-mode btn v-if 1，全在。
+- node --check RC 0（抽取内联 script）。
+- bin/ui 字节 identical（src=dst=227483）。
+
+**教训（本批再遇假提交）**: 一次 git commit 工具回执报 [main a3f7c2e] 2 files changed 成功，但 git log 顶部仍是 0cdf8f2、SHA a3f7c2e rev-parse unknown、ui/index.html 仍 M → 那次提交根本没发生。再次印证：提交只信 git log 顶部 SHA + git status，不信 commit 回执。
+
+**待提交**: ui/index.html（spEdit 选图片 + pickImageFor field 参）+ 本 PROGRESS.md。
