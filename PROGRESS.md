@@ -145,6 +145,7 @@ ContextMenuMaster/
 - [x] 可视化视图右键编辑：经典菜单行右键弹 FairyGlass 操作菜单（改名/换图标/启停），复用列表视图同套方法（系统项二次确认、自动备份 toast 全继承），与列表视图功能对齐。现代菜单仍只读不挂右键。
 - [x] 关于页「作者与版本」卡片：作者 / 版本 / 协议 / 项目主页（三语），主页链接走后端 `open_url` bind（`ShellExecuteW` 开默认浏览器，仅放行 https 防注入）；页脚版本号读 `appVersion` 与 CMake 工程版本统一。
 - [x] Win11 专区：经典/新版菜单状态 + 一键互换。
+- [x] README 界面截图节落地：6 张真机截图存 `docs/screenshots/`（main-visual / list-view / win11-zone / shellnew / desktop-visual / about），README `<table>` 引用零死链。`临时/` 是暂存原图（.gitignore 已排除），确认后可清。
 - [x] Windows 内建项三语友好名兜底 `BUILTIN_NAMES`（verb 按 id、handler 按清洗后 label，含夸克AI）。
 - [x] 列表操作按钮统一 FairyGlass 玻璃风（玻璃填充+描边+圆角+图标，hover 提蓝边、active 微缩）。
 - [x] 启停开关关态可辨（深底+明描边+inset，修了只显示一颗球的 bug，见踩坑 13）；主题/语言弹层叠 86% 深底防透明看不清。
