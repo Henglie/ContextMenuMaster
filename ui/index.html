@@ -391,6 +391,24 @@
   .card{ padding:18px; margin-bottom:14px; }
   .card-title{ font-size:14px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
   .card-desc{ font-size:12px; color:var(--fg-muted); line-height:1.65; margin-bottom:14px; }
+
+  /* 富媒体预览：模拟右键菜单项 / Rich-media preview: mock context menu item */
+  .rich-preview-box{ margin:8px 0 4px; }
+  .rich-menu-item{
+    display:flex; align-items:center; gap:10px;
+    padding:8px 12px; min-width:240px;
+    background:rgba(255,255,255,.92); color:#222;
+    border:1px solid rgba(0,0,0,.08); border-radius:6px;
+    box-shadow:0 2px 8px rgba(0,0,0,.12);
+    font-size:13px;
+  }
+  .rich-thumb{ width:32px; height:32px; flex-shrink:0; object-fit:contain; }
+  .rich-thumb-placeholder{ width:32px; height:32px; flex-shrink:0;
+    background:linear-gradient(135deg,#e0e0e0,#f5f5f5); border-radius:4px; }
+  .rich-label{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rich-arrow{ color:#999; font-size:10px; }
+  .rich-hint{ margin-top:8px; font-size:11px; color:var(--fg-dim); }
+  .rich-preview-box code{ background:rgba(0,0,0,.06); padding:1px 5px; border-radius:3px; font-size:11px; }
   .cat-title{ font-size:11.5px; color:var(--fg-dim); font-weight:600; letter-spacing:.5px; text-transform:uppercase;
     display:flex; align-items:center; gap:10px; margin:6px 2px 12px; }
   .cat-title::after{ content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--glass-stroke),transparent); }
@@ -794,6 +812,9 @@
       </div>
     </nav>
     <!-- 关于：移出滚动列表，常驻侧栏底部，始终可见 / About: pinned to sidebar bottom, always visible -->
+    <div class="nav-item nav-pinned" :class="{on: tab==='richmedia'}" @click="tab='richmedia'">
+      <span class="ic">▣</span>{{ t('nav.richmedia') }}
+    </div>
     <div class="nav-item nav-pinned" :class="{on: tab==='about'}" @click="tab='about'">
       <span class="ic">◔</span>{{ t('nav.about') }}
     </div>
@@ -1476,6 +1497,35 @@
       </div>
 
       <!-- ============ 关于 / About ============ -->
+      <div v-show="tab==='richmedia'" class="lg-enter">
+        <div class="card glass">
+          <div class="card-title">{{ t('richmedia.title') }}</div>
+          <div class="card-desc" v-html="t('richmedia.intro')"></div>
+        </div>
+        <div class="card glass">
+          <div class="card-title">{{ t('richmedia.preview_title') }}</div>
+          <div class="card-desc">{{ t('richmedia.preview_desc') }}</div>
+          <div style="margin:16px 0">
+            <button class="btn primary" @click="previewRichMedia" :disabled="busy || richPreview.loading">
+              <span v-if="richPreview.loading">{{ t('richmedia.loading') }}</span>
+              <span v-else>{{ t('richmedia.pick_image') }}</span>
+            </button>
+          </div>
+          <div v-if="richPreview.dataUri || richPreview.loading || richPreview.error" class="rich-preview-box">
+            <div class="rich-menu-item">
+              <img v-if="richPreview.dataUri" :src="richPreview.dataUri" class="rich-thumb" />
+              <span v-else class="rich-thumb-placeholder"></span>
+              <span class="rich-label">{{ richPreview.name || '...' }}</span>
+              <span class="rich-arrow">▶</span>
+            </div>
+            <div class="rich-hint">{{ t('richmedia.hint') }}</div>
+          </div>
+        </div>
+        <div class="card glass">
+          <div class="card-title">{{ t('richmedia.status_title') }}</div>
+          <div class="card-desc" v-html="t('richmedia.status_body')"></div>
+        </div>
+      </div>
       <div v-show="tab==='about'" class="lg-enter">
         <div class="card glass">
           <div class="card-title">{{ t('brand.zh') }} · {{ t('brand.en') }}</div>
@@ -1774,7 +1824,7 @@
 const i18n = {
   'zh-CN': {
     brand:{ zh:'鼠标右键主理人', en:'Context Menu Master' },
-    nav:{ editor:'菜单编辑', win11:'Windows 11 专区', about:'关于', grp_common:'常用场景', grp_submenu:'二级菜单', grp_winx:'快捷入口' },
+    nav:{ editor:'菜单编辑', win11:'Windows 11 专区', about:'关于', richmedia:'富媒体', grp_common:'常用场景', grp_submenu:'二级菜单', grp_winx:'快捷入口' },
     status:{ classic:'经典菜单', modern:'新版菜单' },
     theme:{ system:'跟随系统', light:'浅色', dark:'深色', preview_scope:'预览菜单主题' },
     scene:{
@@ -1904,6 +1954,17 @@ const i18n = {
       save:'保存', need_label:'请填写显示名称', need_target:'请填写目标',
       del_title:'删除自定义项', del_desc:'确定删除「{name}」？此项由本工具创建，将直接从注册表移除。',
     },
+    richmedia:{
+      title:'富媒体右键扩展',
+      intro:'本工具特色：右键文件时显示带缩略图的菜单项。装富媒体扩展后，右键图片直接看缩略图，右键文件夹/压缩包看内容子菜单。',
+      preview_title:'效果预览',
+      preview_desc:'选一张图片，预览富媒体扩展装好后右键菜单项的样子。',
+      pick_image:'选图片预览',
+      loading:'处理中…',
+      hint:'↑ 装扩展后右键文件即出此项，左侧为真实缩略图',
+      status_title:'安装状态',
+      status_body:'富媒体扩展尚未注册到系统。<br>真机安装：管理员运行 <code>regsvr32 CmmShellExt.dll</code> → 重启资源管理器。<br>卸载：<code>regsvr32 /u CmmShellExt.dll</code>。<br>护栏：压缩包超 200MB 或枚举超 800ms 自动降级为普通项，不卡右键。',
+    },
     about:{
       body:'在 Windows 11 上重新主理你的鼠标右键菜单。可视化编辑、批量管理、一键找回经典菜单。<br>纯本地运行，只改当前用户注册表，随时可逆。',
       tech_title:'技术栈',
@@ -1946,7 +2007,7 @@ const i18n = {
   },
   'zh-TW': {
     brand:{ zh:'滑鼠右鍵主理人', en:'Context Menu Master' },
-    nav:{ editor:'選單編輯', win11:'Windows 11 專區', about:'關於', grp_common:'常用場景', grp_submenu:'二級選單', grp_winx:'快捷入口' },
+    nav:{ editor:'選單編輯', win11:'Windows 11 專區', about:'關於', richmedia:'富媒體', grp_common:'常用場景', grp_submenu:'二級選單', grp_winx:'快捷入口' },
     status:{ classic:'經典選單', modern:'新版選單' },
     theme:{ system:'跟隨系統', light:'淺色', dark:'深色', preview_scope:'預覽選單主題' },
     scene:{
@@ -2067,6 +2128,17 @@ const i18n = {
       save:'儲存', need_label:'請填寫顯示名稱', need_target:'請填寫目標',
       del_title:'刪除自訂項', del_desc:'確定刪除「{name}」？此項由本工具建立，將直接從登錄檔移除。',
     },
+    richmedia:{
+      title:'富媒體右鍵擴充',
+      intro:'本工具特色：右鍵檔案時顯示帶縮圖的選單項。裝富媒體擴充後，右鍵圖片直接看縮圖，右鍵資料夾/壓縮包看內容子選單。',
+      preview_title:'效果預覽',
+      preview_desc:'選一張圖片，預覽富媒體擴充裝好後右鍵選單項的樣子。',
+      pick_image:'選圖片預覽',
+      loading:'處理中…',
+      hint:'↑ 裝擴充後右鍵檔案即出此項，左側為真實縮圖',
+      status_title:'安裝狀態',
+      status_body:'富媒體擴充尚未註冊到系統。<br>真機安裝：管理員執行 <code>regsvr32 CmmShellExt.dll</code> → 重啟檔案總管。<br>卸載：<code>regsvr32 /u CmmShellExt.dll</code>。<br>護欄：壓縮包超 200MB 或列舉超 800ms 自動降級為普通項，不卡右鍵。',
+    },
     about:{
       body:'在 Windows 11 上重新主理你的滑鼠右鍵選單。視覺化編輯、批次管理、一鍵找回經典選單。<br>純本機執行，只改目前使用者登錄檔，隨時可逆。',
       tech_title:'技術棧',
@@ -2110,7 +2182,7 @@ const i18n = {
   },
   'en': {
     brand:{ zh:'Context Menu Master', en:'Context Menu Master' },
-    nav:{ editor:'Menu Editor', win11:'Windows 11 Zone', about:'About', grp_common:'Common', grp_submenu:'Submenus', grp_winx:'Quick Access' },
+    nav:{ editor:'Menu Editor', win11:'Windows 11 Zone', about:'About', richmedia:'Rich Media', grp_common:'Common', grp_submenu:'Submenus', grp_winx:'Quick Access' },
     status:{ classic:'Classic menu', modern:'New menu' },
     theme:{ system:'System', light:'Light', dark:'Dark', preview_scope:'Preview menu theme' },
     scene:{
@@ -2246,6 +2318,17 @@ const i18n = {
       f_position:'Position', pos_default:'Default', pos_top:'Top', pos_bottom:'Bottom',
       save:'Save', need_label:'Please enter a display name', need_target:'Please enter a target',
       del_title:'Delete custom item', del_desc:'Delete “{name}”? This custom menu item will be removed from the registry (reversible by re-creating it).',
+    },
+    richmedia:{
+      title:'Rich-Media Shell Extension',
+      intro:'Signature feature: right-click files to show menu items with real thumbnails. With the extension installed, right-click an image to see its thumbnail, or a folder/archive to see a content submenu.',
+      preview_title:'Preview',
+      preview_desc:'Pick an image to preview how the rich-media menu item looks after installation.',
+      pick_image:'Pick image to preview',
+      loading:'Processing…',
+      hint:'↑ After install, right-click a file shows this item with a real thumbnail on the left',
+      status_title:'Installation Status',
+      status_body:'Rich-media extension is not registered.<br>Install: run <code>regsvr32 CmmShellExt.dll</code> as admin → restart Explorer.<br>Uninstall: <code>regsvr32 /u CmmShellExt.dll</code>.<br>Safeguard: archives over 200MB or enumeration over 800ms auto-degrade to a plain item, never freezes the menu.',
     },
     about:{
       body:'Take charge of your right-click menu on Windows 11. Visual editing, batch management, one-click classic-menu restore.<br>Runs fully local, touches only the current-user registry, fully reversible.',
@@ -2427,6 +2510,7 @@ const app = createApp({
 
       view: 'visual',          // visual（可视化双菜单并排）/ list（列表）
       win11View: 'visual',   // Win11 专区默认可视化视图
+      richPreview: { loading:false, path:'', name:'', dataUri:'', error:false },  // 富媒体预览面板
       items: [],               // 当前场景的菜单项（含 _checked / icon 临时字段）
       loading: false,
       busy: false,
@@ -3689,6 +3773,21 @@ const app = createApp({
         label: it.label || '', kind: this.guessKind(it.command), target: this.guessTarget(it.command),
         icon: it.iconSource || '', position: '',
       };
+    },
+    // 富媒体预览：选图片 → 转 ICO → 提缩略图 data URI → 渲染模拟右键菜单项。
+    async previewRichMedia() {
+      const pick = await this.callBackend('pick_image_file');
+      if (!pick || !pick.ok) return;
+      const name = (pick.path || '').split(/[\\\/]/).pop();
+      this.richPreview = { loading:true, path:pick.path, name, dataUri:'', error:false };
+      try {
+        const r = await this.callBackend('convert_image_to_icon', pick.path);
+        if (!r || !r.ok) { this.richPreview = { loading:false, path:'', name:'', dataUri:'', error:true }; return; }
+        const uri = await this.callBackend('extract_icon', r.path);
+        this.richPreview = { loading:false, path:pick.path, name, dataUri:uri || '', error:false };
+      } catch(e) {
+        this.richPreview = { loading:false, path:'', name:'', dataUri:'', error:true };
+      }
     },
     // 富媒体阶段 1：弹文件选择框挑图片 → 转多尺寸 .ico → 回填到指定弹层的 icon 字段。
     // which 为弹层 state 名（'ftAdd' / 'customEdit' / 'spEdit'）。

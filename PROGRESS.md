@@ -391,3 +391,28 @@ scan 聚合这 4 根 + 各自 shellex 启用/停用镜像。新建自建项写 H
 - GUI 一键装卸开关：需后端 bind + 前端面板 + 提权子进程（regsvr32 要管理员），留下一批。
 
 **下一步候选**: ① 真机验证护栏有效性（构造超大 zip / 海量文件文件夹测降级）；② GUI 一键装卸开关 + 挂载类型收窄；③ 皮肤系统。
+## 第十九批（已完成）: 富媒体预览面板落地（GUI 展示特色，无系统副作用）
+
+**背景**: 恒烈指示「富媒体先做一个简单的预览落地功能，说明我们的特色」。第十七/十八批做了 COM DLL + 护栏，但用户在 GUI 里看不到富媒体扩展的效果——只有真机 regsvr32 + 重启 explorer 才能体验。本批在 GUI 加一个「富媒体」预览面板，让用户无需安装 DLL 就能直观看到富媒体扩展的效果，作为产品特色展示。
+
+**改动（仅 ui/index.html，CRLF 行尾）**:
+1. nav 加「富媒体」入口（tab='richmedia'，置底「关于」前，图标 ▣）。
+2. 主区加富媒体视图：三张卡片——① 特色说明（富媒体扩展是什么）② 效果预览（选图片→显示模拟右键菜单项）③ 安装状态（regsvr32 装卸命令 + 护栏说明）。
+3. 预览交互：previewRichMedia 方法复用已有三 bind 链——pick_image_file 选图片 → convert_image_to_icon 转 ICO → extract_icon 拿 data URI → 渲染模拟右键菜单项（32px 缩略图 + 文件名 + 子菜单箭头 ▶）。
+4. data 加 richPreview 状态（loading/path/name/dataUri/error）。
+5. CSS 加 .rich-menu-item 等样式（模拟 Windows 右键菜单项：白底圆角阴影 + 左缩略图 + 中文字 + 右箭头）。
+6. i18n 三语补 nav.richmedia + richmedia 命名空间（title/intro/preview_title/preview_desc/pick_image/loading/hint/status_title/status_body）。
+
+**设计取舍**:
+- 预览链条三步异步（pick→convert→extract），有 loading 态。虽比直接读图片慢，但复用已有 bind 零新 C++ 代码，最简单落地。
+- 模拟右键菜单项用纯 CSS 模拟，不调真实 DLL，无系统副作用。
+- 安装状态卡片静态说明（未检测注册表），给出 regsvr32 装卸命令 + 护栏阈值，用户自助操作。
+
+**验证（客观关卡）**:
+- node --check RC 0（提取内联 script 块，JS 语法合法）。
+- 纯子串 grep 磁盘：24 锚点全在——CSS 6 处 / nav 入口 1 / 视图 1 / 按钮 1 / 模拟菜单项 4 / data 声明 1 / 方法 5 / i18n 三语 nav.richmedia 3 + richmedia 命名空间 3。
+- bin/ui 字节 identical（src=dst=233955 字节）。
+
+**代码冗余审查**: 本次新增复用已有三 bind，无新 C++ 代码。pickImageFor（回填弹层 icon）与 previewRichMedia（预览展示）前两步相似但后续处理不同，提取公共方法会增加抽象层不值当，保持独立更易读。
+
+**下一步候选**: ① 真机验证富媒体 DLL 效果（regsvr32 + 重启 explorer）；② GUI 一键装卸开关（检测注册状态 + 提权子进程 regsvr32）；③ 挂载类型收窄（* → 具体类型）；④ 预览面板加「选任意文件」支持（目前只能选图片）。
