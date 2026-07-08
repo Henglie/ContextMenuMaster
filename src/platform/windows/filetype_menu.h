@@ -88,6 +88,13 @@ std::string add_filetype_item(const std::string& ext, const std::string& label,
                               const std::string& kind, const std::string& target,
                               const std::string& iconSource, const std::string& position);
 
+// 编辑自建项（仅限 cmm_ 前缀、HKCU SFA 下的项）：重写 label/kind/target/iconSource/position。
+//   与 add_filetype_item 同字段语义；id 为 scan 返回的 id（sfaext|verb:cmm_xxx）。返回 {"ok":bool,"key":"..."}。
+std::string edit_filetype_item(const std::string& ext, const std::string& id,
+                               const std::string& label, const std::string& kind,
+                               const std::string& target, const std::string& iconSource,
+                               const std::string& position);
+
 // 删除自建项（仅限 cmm_ 前缀、且在 HKCU SFA 下的项）。返回 {"ok":bool,"key":"..."}。
 std::string del_filetype_item(const std::string& ext, const std::string& id);
 

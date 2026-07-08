@@ -15,6 +15,7 @@
 #include <windows.h>
 #include <commctrl.h>     // SetWindowSubclass
 #include <shellapi.h>     // ShellExecuteW
+#include <objbase.h>      // CoInitializeEx / CoUninitialize（图片选择对话框需 STA）
 #include <string>
 #include <cstdio>
 #include <thread>         // 后台线程跑 probe / 图标提取，避免阻塞 WebView2 UI 线程
@@ -31,6 +32,7 @@
 #include "platform/windows/win11menu.h"
 #include "platform/windows/custom_menu.h"
 #include "platform/windows/filetype_menu.h"
+#include "platform/windows/image_icon.h"   // 富媒体阶段 1：图片转图标
 #include <vector>
 
 #pragma comment(lib, "comctl32.lib")
@@ -181,6 +183,27 @@ std::string menu_result_json(cmm::MenuResult r) {
     s += key;
     s += "\"}";
     return s;
+}
+
+// 把任意字符串转成 JSON 字符串字面量（含转义）。webview 的 resolve 把 result
+// 直接插值进 JS 源码（见 webview.h resolve()），纯路径会触发 JS 语法错误，
+// 必须包成 "..." 字符串字面量。用于 pick_image_file 把选中路径回传前端。
+std::string json_escape(const std::string& s) {
+    std::string o; o.reserve(s.size() + 8);
+    for (char c : s) {
+        switch (c) {
+            case '"':  o += "\\\""; break;
+            case '\\': o += "\\\\"; break;
+            case '\n': o += "\\n";  break;
+            case '\r': o += "\\r";  break;
+            case '\t': o += "\\t";  break;
+            default:
+                if ((unsigned char)c < 0x20) {
+                    char b[8]; std::snprintf(b, sizeof(b), "\\u%04x", (unsigned)(unsigned char)c); o += b;
+                } else { o += c; }
+        }
+    }
+    return o;
 }
 
 // 从 webview bind 的 JSON 数组参数里取第一个字符串，并还原 JSON 转义。
@@ -734,6 +757,49 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             std::string ext = parse_string_arg_at(req, 0);
             std::thread([&w, seq, ext]() {
                 w.resolve(seq, 0, cmm::backup_filetype(ext));
+            }).detach();
+        }, nullptr);
+
+    // —— 文件类型自建项编辑（异步，仿 add_filetype_item 多个 id 参）——
+    //   [ext, id, label, kind, target, iconSource, position]
+    w.bind("edit_filetype_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string ext    = parse_string_arg_at(req, 0);
+            std::string id     = parse_string_arg_at(req, 1);
+            std::string label  = parse_string_arg_at(req, 2);
+            std::string kind   = parse_string_arg_at(req, 3);
+            std::string target = parse_string_arg_at(req, 4);
+            std::string icon   = parse_string_arg_at(req, 5);
+            std::string pos    = parse_string_arg_at(req, 6);
+            std::thread([&w, seq, ext, id, label, kind, target, icon, pos]() {
+                w.resolve(seq, 0, cmm::edit_filetype_item(ext, id, label, kind, target, icon, pos));
+            }).detach();
+        }, nullptr);
+
+    // —— 富媒体阶段 1：图片转图标（两个 bind 都走异步线程 + COM STA）——
+    //   pick_image_file：无参，弹系统文件选择框挑图片；返回 {"ok":bool,"path":"..."}（取消 ok=false）。
+    //   convert_image_to_icon：[srcPath]，把图片转多尺寸 .ico；返回 {ok,key,path}。
+    //   IFileOpenDialog 需 STA 消息循环，故线程内自带 CoInitializeEx，不在 UI 线程弹框。
+    //   pick 的纯路径用 json_escape 包成 JSON 字符串字面量（踩坑 1：resolve 直接插值进 JS）。
+    w.bind("pick_image_file",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::thread([&w, seq]() {
+                CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+                std::string path = cmm::pick_image_file();
+                CoUninitialize();
+                std::string json = path.empty()
+                    ? std::string("{\"ok\":false}")
+                    : std::string("{\"ok\":true,\"path\":\"") + json_escape(path) + "\"}";
+                w.resolve(seq, 0, json);
+            }).detach();
+        }, nullptr);
+    w.bind("convert_image_to_icon",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string path = parse_string_arg_at(req, 0);
+            std::thread([&w, seq, path]() {
+                CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+                w.resolve(seq, 0, cmm::convert_image_to_icon(path));
+                CoUninitialize();
             }).detach();
         }, nullptr);
 

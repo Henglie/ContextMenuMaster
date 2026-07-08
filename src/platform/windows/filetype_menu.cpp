@@ -790,6 +790,64 @@ std::string add_filetype_item(const std::string& ext, const std::string& label,
     return result_json_id(true, "ok", id);
 }
 
+// ---- 编辑自建项（仅 cmm_ 前缀、仅 HKCU SFA\.ext） --------------------------
+
+std::string edit_filetype_item(const std::string& ext, const std::string& id,
+                               const std::string& label, const std::string& kind,
+                               const std::string& target, const std::string& iconSource,
+                               const std::string& position) {
+    FtAssoc a = resolve_assoc_w(ext);
+    if (!a.valid) return result_json(false, "bad_ext");
+    if (label.empty() || target.empty()) return result_json(false, "bad_arg");
+
+    std::string tag;
+    bool isHandler = false;
+    std::wstring name;
+    if (!parse_ft_id(id, &tag, &isHandler, &name)) return result_json(false, "bad_id");
+    if (isHandler) return result_json(false, "not_custom");
+    if (!is_cmm_name(name)) return result_json(false, "not_custom");
+
+    std::wstring extW = utf8_to_wide(a.ext);
+    std::wstring verbRel = L"SystemFileAssociations\\" + extW + L"\\shell\\" + name;
+
+    // 仅 HKCU（本工具唯一写入位置）存在才可编辑。
+    HKEY hProbe = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, hive_classes_path(verbRel).c_str(),
+                      0, KEY_READ, &hProbe) != ERROR_SUCCESS)
+        return result_json(false, "not_found");
+    RegCloseKey(hProbe);
+
+    if (!backup_one_root(L"SystemFileAssociations\\" + extW, a.ext, "sfaext"))
+        return result_json(false, "backup_failed");
+
+    // 重写 verb 键值（MUIVerb + 默认值 + Icon + Position）。
+    HKEY hVerb = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, hive_classes_path(verbRel).c_str(),
+                      0, KEY_SET_VALUE, &hVerb) != ERROR_SUCCESS)
+        return result_json(false, "registry_failed");
+    std::wstring wLabel = utf8_to_wide(label);
+    set_str(hVerb, L"MUIVerb", wLabel);
+    set_str(hVerb, nullptr, wLabel);
+    std::wstring wIcon = utf8_to_wide(iconSource);
+    if (!wIcon.empty()) set_str(hVerb, L"Icon", wIcon);
+    else RegDeleteValueW(hVerb, L"Icon");
+    if (position == "top")         set_str(hVerb, L"Position", L"Top");
+    else if (position == "bottom") set_str(hVerb, L"Position", L"Bottom");
+    else RegDeleteValueW(hVerb, L"Position");
+    RegCloseKey(hVerb);
+
+    // 重写 command 子键。
+    std::wstring cmd = build_ft_command(kind, utf8_to_wide(target));
+    HKEY hCmd = nullptr;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, hive_classes_path(verbRel + L"\\command").c_str(),
+                        0, nullptr, 0, KEY_SET_VALUE, nullptr, &hCmd, nullptr)
+            != ERROR_SUCCESS)
+        return result_json(false, "registry_failed");
+    bool ok = set_str(hCmd, nullptr, cmd);
+    RegCloseKey(hCmd);
+    return ok ? result_json(true, "ok") : result_json(false, "registry_failed");
+}
+
 // ---- 删除自建项（仅 cmm_ 前缀、仅 HKCU SFA\.ext） --------------------------
 
 std::string del_filetype_item(const std::string& ext, const std::string& id) {

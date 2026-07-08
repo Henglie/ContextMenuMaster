@@ -1658,7 +1658,10 @@
         </label>
         <label class="wa-field">
           <span class="wa-label">{{ t('custom.f_icon') }}</span>
-          <input class="wa-input" type="text" v-model="ftAdd.icon" :placeholder="t('custom.f_icon_ph')" />
+          <div style="display:flex;gap:6px">
+            <input class="wa-input" type="text" v-model="ftAdd.icon" :placeholder="t('custom.f_icon_ph')" style="flex:1" />
+            <button type="button" class="btn sm" @click="pickImageFor('ftAdd')" :disabled="busy">{{ t('custom.pick_image') }}</button>
+          </div>
         </label>
         <label class="wa-field">
           <span class="wa-label">{{ t('custom.f_position') }}</span>
@@ -1845,6 +1848,7 @@ const i18n = {
       f_target:'目标', f_target_ph:'程序/文件夹的完整路径，如 C:\\\\Windows\\\\System32\\\\notepad.exe',
       f_target_url_ph:'网址，如 https://example.com',
       f_icon:'图标（可选）', f_icon_ph:'图标路径，如 exe 路径 或 C:\\\\x.ico，留空则无图标',
+      pick_image:'选图片',
       f_position:'位置', pos_default:'默认', pos_top:'置于菜单顶部', pos_bottom:'置于菜单底部',
       save:'保存', need_label:'请填写显示名称', need_target:'请填写目标',
       del_title:'删除自定义项', del_desc:'确定删除「{name}」？此项由本工具创建，将直接从注册表移除。',
@@ -1871,6 +1875,7 @@ const i18n = {
       registry_failed:'注册表写入失败', refresh_failed:'已改注册表但刷新失败，重新登录后生效',
       magic_done:'已为 {n} 项追加后缀', magic_empty:'请先勾选要处理的菜单项',
       backup_done:'已自动备份到本地：{path}', backup_failed:'备份失败',
+      icon_converted:'已转换为图标', icon_convert_failed:'图片转换图标失败',
       cannot_rename:'此项不支持改名',
       cannot_change_icon:'此项不支持换图标',
       cannot_toggle:'此项不支持启停',
@@ -2006,6 +2011,7 @@ const i18n = {
       f_target:'目標', f_target_ph:'程式/資料夾的完整路徑，如 C:\\\\Windows\\\\System32\\\\notepad.exe',
       f_target_url_ph:'網址，如 https://example.com',
       f_icon:'圖示（可選）', f_icon_ph:'圖示路徑，如 exe 路徑 或 C:\\\\x.ico，留空則無圖示',
+      pick_image:'選圖片',
       f_position:'位置', pos_default:'預設', pos_top:'置於選單頂部', pos_bottom:'置於選單底部',
       save:'儲存', need_label:'請填寫顯示名稱', need_target:'請填寫目標',
       del_title:'刪除自訂項', del_desc:'確定刪除「{name}」？此項由本工具建立，將直接從登錄檔移除。',
@@ -2032,6 +2038,7 @@ const i18n = {
       registry_failed:'登錄檔寫入失敗', refresh_failed:'已改登錄檔但重新整理失敗，重新登入後生效',
       magic_done:'已為 {n} 項追加後綴', magic_empty:'請先勾選要處理的選單項',
       backup_done:'已自動備份到本機：{path}', backup_failed:'備份失敗',
+      icon_converted:'已轉換為圖示', icon_convert_failed:'圖片轉換圖示失敗',
       cannot_rename:'此項不支援改名',
       cannot_change_icon:'此項不支援換圖示',
       cannot_toggle:'此項不支援啟停',
@@ -2184,6 +2191,7 @@ const i18n = {
       f_target_ph:'Program / folder path, or command line',
       f_target_url_ph:'e.g. https://example.com',
       f_icon:'Icon (optional)', f_icon_ph:'e.g. C:\\\\Windows\\\\System32\\\\notepad.exe or icon.ico',
+      pick_image:'Pick image',
       f_position:'Position', pos_default:'Default', pos_top:'Top', pos_bottom:'Bottom',
       save:'Save', need_label:'Please enter a display name', need_target:'Please enter a target',
       del_title:'Delete custom item', del_desc:'Delete “{name}”? This custom menu item will be removed from the registry (reversible by re-creating it).',
@@ -2210,6 +2218,7 @@ const i18n = {
       registry_failed:'Registry write failed', refresh_failed:'Registry changed but refresh failed — applies after re-login',
       magic_done:'Appended suffix to {n} item(s)', magic_empty:'Select some menu items first',
       backup_done:'Backed up locally: {path}', backup_failed:'Backup failed',
+      icon_converted:'Converted to icon', icon_convert_failed:'Image-to-icon conversion failed',
       cannot_rename:'This item does not support rename',
       cannot_change_icon:'This item does not support icon change',
       cannot_toggle:'This item does not support toggling',
@@ -3628,6 +3637,19 @@ const app = createApp({
         label: it.label || '', kind: this.guessKind(it.command), target: this.guessTarget(it.command),
         icon: it.iconSource || '', position: '',
       };
+    },
+    // 富媒体阶段 1：弹文件选择框挑图片 → 转多尺寸 .ico → 回填到指定弹层的 icon 字段。
+    // which 为弹层 state 名（'ftAdd'；将来 customEdit modal 建好后可传 'customEdit'）。
+    async pickImageFor(which) {
+      const pick = await this.callBackend('pick_image_file');
+      if (!pick || !pick.ok) return;  // 用户取消
+      const r = await this.callBackend('convert_image_to_icon', pick.path);
+      if (r && r.ok) {
+        this[which].icon = r.path;
+        this.showToast(this.t('toast.icon_converted'), 'ok');
+      } else {
+        this.showToast(this.t('toast.icon_convert_failed'), 'err');
+      }
     },
     async ftAddCommit() {
       const e = this.ftAdd;

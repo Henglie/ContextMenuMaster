@@ -268,3 +268,29 @@ scan 聚合这 4 根 + 各自 shellex 启用/停用镜像。新建自建项写 H
 - 恒烈真机反馈第十二批改动「都没修复」→ 排查发现 bin 与 src 字节比对 identical:True、四关键符号（win11View/spring-back/grp 中文/nav 圆角）全在 bin。修复本就到位。
 - **真根因**：旧 ContextMenuMaster.exe 进程未关，GUI 看的是未重启的旧窗口（WebView2 已加载的旧 HTML 常驻内存，改 bin/ui 不会热更）。 后重开即见。
 - **教训补入四道客观关卡之外的第五条**：改 UI 后除了真 cp 到 bin + 字节比对，还必须确认 GUI 进程已重启（旧进程锁旧窗口）。见 [[win-python3-alias-trap]]。
+
+## 第十四批（真实状态·半成品，接手先按此核对磁盘）: 富媒体图片图标 GUI 未接通
+
+> 本轮连环假核验的沉痛总结：git log / 编译 / node --check / bin 字节比对是唯一可信关卡。
+> **前几批 PROGRESS 里凡标「已完成/已落地」的 GUI 接线，接手都必须用纯子串（不含换行，避 CRLF 坑）重新 grep 磁盘确认，不要信。**
+
+**已真落盘（git 8a7bcdb + 未提交工作区，纯子串核验过）**:
+- `filetype_menu.{h,cpp}`: `edit_filetype_item`（改自建项 label/kind/target/icon/pos，仅 cmm_ 前缀、仅 HKCU、写前备份）——**在**。
+- `main.cpp`: filetype `edit` CLI 子命令——**在**（`image convert` CLI=**0，没写**）。
+- `CMakeLists.txt`: 挂了 `image_icon.cpp`——**在**（image_icon 首次真编译通过）。
+- `image_icon.{h,cpp}`: 图片转多尺寸 PNG-in-ICO 引擎 + `pick_image_file`(IFileOpenDialog)。**未提交的孤儿文件**，CLI/GUI 均未接通，但文件本身编译过、CLI 单跑（若补 image convert 命令）验证过 ICO 字节合法。
+- `ui/index.html`: 弹簧搜索动画（spring-back 曲线，本批真落）、win11View 默认可视化、grp 三语中文、nav 圆角、文件类型编辑前端（ftEditOpen/ftAddCommit 按 mode 分发/edit_filetype_item 调用）——**全在**。
+
+**没落盘（功能在 GUI 里是死的，接手必补）**:
+- `gui_main.cpp`: `edit_filetype_item` / `pick_image_file` / `convert_image_to_icon` 三个 bind **全 0**。→ 文件类型编辑在 GUI 点了没后端；图片图标功能 GUI 完全没有。
+- `main.cpp`: `image convert` CLI **0**。
+- `ui/index.html`: `pick_image_file` / `pickImageFor` / 选图片按钮 **全 0**。→ 前端没有「选图片」入口。
+
+**接手下一步顺序**:
+1. gui_main.cpp 补三个 bind（edit_filetype_item 仿 add_filetype_item 多个 id 参；pick_image_file/convert_image_to_icon 异步线程内 CoInitializeEx STA）。
+2. main.cpp 补 `image convert <path>` CLI（宽命令行取路径）。
+3. ui 补：custom + ftAdd 两弹层图标字段各加「选图片」按钮 → pickImageFor(which) 走 pick_image_file→convert_image_to_icon→回填 icon。三语 ft.icon_converted/toast.icon_convert_failed 已在。
+4. 每步：编译 RC 0 + node --check RC 0 + **纯子串 grep 磁盘核验** + cp 到 build/debug/bin/ui + 字节 identical + 提交后 git log 看 SHA。
+5. image_icon.{h,cpp} 记得 git add（未跟踪）。
+
+**未提交清单**: CMakeLists.txt / main.cpp / filetype_menu.{h,cpp} 已 M，image_icon.{h,cpp} 未跟踪。（本批只提交了 ui+PROGRESS = 8a7bcdb，后端那批仍在工作区未提交。）

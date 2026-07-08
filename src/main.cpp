@@ -28,6 +28,7 @@
 #include "platform/windows/win11menu.h"
 #include "platform/windows/custom_menu.h"
 #include "platform/windows/filetype_menu.h"
+#include "platform/windows/image_icon.h"
 
 #include <windows.h>
 #include <cstdio>
@@ -82,7 +83,9 @@ void print_usage() {
               "  CmmCli openwith list    list Applications (Open with) apps as JSON\n"
               "\n"
               "  CmmCli win11 list       list Win11 modern menu items as JSON\n"
-              "  CmmCli win11 toggle <on|off> <clsid> [displayName]");
+              "  CmmCli win11 toggle <on|off> <clsid> [displayName]\n"
+              "  CmmCli image convert <imgPath>\n"
+              "                          convert image to multi-size .ico (rich-media stage 1)");
 }
 
 }  // namespace
@@ -597,7 +600,7 @@ int main(int argc, char** argv) {
     // ext 为 ASCII，但 label/target/id 可能含中文 → 统一走宽命令行取参数。
     if (std::strcmp(cmd, "filetype") == 0) {
         if (argc < 3) {
-            std::puts("usage: CmmCli filetype <scan|toggle|add|del|backup>");
+            std::puts("usage: CmmCli filetype <scan|toggle|add|edit|del|backup>");
             return 1;
         }
         // 宽命令行按 argv 下标取 UTF-8 参数。越界返回空串。
@@ -648,6 +651,15 @@ int main(int argc, char** argv) {
                                         wpick(7), wpick(8)));
             return 0;
         }
+        if (std::strcmp(argv[2], "edit") == 0) {
+            if (argc < 8) {
+                std::puts("usage: CmmCli filetype edit <ext> <id> <label> <kind> <target> [icon] [top|bottom]");
+                return 1;
+            }
+            emit(cmm::edit_filetype_item(wpick(3), wpick(4), wpick(5), wpick(6), wpick(7),
+                                         wpick(8), wpick(9)));
+            return 0;
+        }
         if (std::strcmp(argv[2], "del") == 0) {
             if (argc < 5) { std::puts("usage: CmmCli filetype del <ext> <id>"); return 1; }
             emit(cmm::del_filetype_item(wpick(3), wpick(4)));
@@ -660,6 +672,47 @@ int main(int argc, char** argv) {
         }
         std::printf("unknown filetype subcommand: %s\n", argv[2]);
         return 1;
+    }
+
+    // —— 图片转图标（富媒体阶段 1）—— 把任意 PNG/JPG/BMP/GIF 转多尺寸 .ico，
+    //   存到 %LOCALAPPDATA%\ContextMenuMaster\icons\，注册表 Icon 可直接指向。
+    //   用法：CmmCli image convert <imgPath>  （路径走宽命令行，支持中文/空格）
+    if (std::strcmp(cmd, "image") == 0) {
+        if (argc < 4) {
+            std::puts("usage: CmmCli image convert <imgPath>");
+            return 1;
+        }
+        if (std::strcmp(argv[2], "convert") != 0) {
+            std::printf("unknown image subcommand: %s\n", argv[2]);
+            return 1;
+        }
+        // 宽命令行取路径（支持中文/空格），与 sendto rename 同套做法。
+        std::string imgPath;
+        {
+            int wargc = 0;
+            LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+            if (wargv) {
+                if (wargc >= 4 && wargv[3] && wargv[3][0]) {
+                    int n = WideCharToMultiByte(CP_UTF8, 0, wargv[3], -1,
+                                                nullptr, 0, nullptr, nullptr);
+                    if (n > 1) {
+                        imgPath.resize(n - 1);
+                        WideCharToMultiByte(CP_UTF8, 0, wargv[3], -1,
+                                            imgPath.data(), n, nullptr, nullptr);
+                    }
+                }
+                LocalFree(wargv);
+            }
+        }
+        if (imgPath.empty()) {
+            std::puts("empty image path");
+            return 1;
+        }
+        std::string json = cmm::convert_image_to_icon(imgPath);
+        std::fwrite(json.data(), 1, json.size(), stdout);
+        std::fwrite("\n", 1, 1, stdout);
+        std::fflush(stdout);
+        return 0;
     }
 
     std::printf("unknown command: %s\n\n", cmd);
