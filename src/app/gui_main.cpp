@@ -4,10 +4,9 @@
 //  用 webview 单头库开一个原生窗口（系统自带 WebView2 承载），加载 Vue 界面。
 //  后端通过 w.bind 把「系统语言检测」「右键菜单接管」两个能力暴露给前端。
 //
-//  语言注入（对标产品需求「启动时由 C++ 传给前端」）：
-//    用 w.init(js) 在每个文档创建时、且早于页面自身脚本之前，注入一段
+//  语言注入：用 w.init(js) 在每个文档创建时、且早于页面自身脚本之前，注入一段
 //    `window.__CMM_LANG__ = "zh-CN|zh-TW|en"`。前端一加载就能同步读到，
-//    无需等一次异步 IPC 往返。另保留 get_sys_lang 绑定作为兜底/对齐姊妹项目。
+//    无需等一次异步 IPC 往返。另保留 get_sys_lang 绑定作为兜底。
 // ============================================================
 #define WEBVIEW_STATIC
 #include "webview/webview.h"
@@ -19,6 +18,8 @@
 #include <string>
 #include <cstdio>
 #include <thread>         // 后台线程跑 probe / 图标提取，避免阻塞 WebView2 UI 线程
+#include <mutex>          // 图标缓存并发保护
+#include <unordered_map>  // 图标缓存
 
 #include "platform/windows/i18n.h"
 #include "platform/windows/context_menu.h"
@@ -32,15 +33,15 @@
 #include "platform/windows/win11menu.h"
 #include "platform/windows/custom_menu.h"
 #include "platform/windows/filetype_menu.h"
-#include "platform/windows/image_icon.h"   // 富媒体阶段 1：图片转图标
+#include "platform/windows/drive_icons.h"   // 此电脑盘符图标管理
+#include "platform/windows/image_icon.h"   // 图片转图标
 #include <vector>
 
 #pragma comment(lib, "comctl32.lib")
 
 namespace {
 
-// 取 exe 所在目录（UTF-8）。用宽字符 API，避免中文路径被 ANSI 破坏。
-// 对标 FairySave：作者项目路径含中文「我的项目源码」，必须宽字符全程。
+// 取 exe 所在目录（UTF-8）。全程用宽字符 API，避免路径含中文时被 ANSI 破坏。
 std::string exe_dir_utf8() {
     wchar_t buf[MAX_PATH];
     GetModuleFileNameW(nullptr, buf, MAX_PATH);
@@ -148,7 +149,7 @@ bool run_capture(std::wstring cmdLine, std::string* outUtf8, DWORD timeoutMs = 8
 }
 
 // 把本地路径拼成合法 file:// URL：反斜杠转正斜杠，非安全字符百分号编码。
-// 不要加 ?t= 查询参数（FairySave 踩坑第 7 条：触发 unique security origin 警告）。
+// 注意：不要加 ?t= 之类查询参数，会触发 unique security origin 警告。
 std::string to_file_url(const std::string& path) {
     std::string url = "file:///";
     for (unsigned char c : path) {
@@ -166,8 +167,8 @@ std::string to_file_url(const std::string& path) {
     return url;
 }
 
-// 把 MenuResult 转成前端用的英文 key（i18n 后端给 key、前端翻译，踩坑第 8 条）。
-// 返回 JSON 对象字符串，前端拿到即对象、不要再 JSON.parse（踩坑第 1 条）。
+// 把 MenuResult 转成前端用的英文 key（后端只给 key，翻译在前端）。
+// 返回 JSON 对象字符串，前端拿到即对象，无需再 JSON.parse。
 std::string menu_result_json(cmm::MenuResult r) {
     const char* key = "unknown";
     bool ok = false;
@@ -274,9 +275,27 @@ std::string parse_string_arg_at(const std::string& req, int index) {
     return "";
 }
 
-// 取 JSON 数组里的布尔值（出现 true 即真），如 ["id",true] -> true。
+// 取 JSON 数组里的布尔字面量，如 ["id",true] -> true。
+// 只认引号外的裸 true，跳过字符串字面量内部——否则形如 ["is_true",false]
+// 的字符串参数会被误判为 true。
 bool parse_bool_arg(const std::string& req) {
-    return req.find("true") != std::string::npos;
+    size_t i = 0;
+    while (i < req.size()) {
+        if (req[i] == '"') {
+            // 跳过整个字符串字面量（含转义），不在其中找 true。
+            ++i;
+            while (i < req.size() && req[i] != '"') {
+                if (req[i] == '\\' && i + 1 < req.size()) ++i;
+                ++i;
+            }
+            ++i;  // 跳过结束引号
+        } else if (req.compare(i, 4, "true") == 0) {
+            return true;
+        } else {
+            ++i;
+        }
+    }
+    return false;
 }
 
 // 关窗到托盘的子类化暂不做（本工具是轻量配置器，关窗即退出更符合直觉）。
@@ -286,6 +305,27 @@ LRESULT CALLBACK SubProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     return DefSubclassProc(hwnd, msg, wp, lp);
 }
 
+// 图标提取结果缓存：一个场景常有几十项引用同一图标源（同一 DLL,-id 或同一 exe），
+// 每次都走 GDI+ 提取 + PNG 编码 + base64 很浪费。按 iconSource 缓存 data URI，
+// 命中直接返回。图标源产出的 URI 在进程生命周期内稳定，无需失效。
+// 多个后台线程并发调用，用 mutex 保护。
+std::string extract_icon_cached(const std::string& src) {
+    static std::mutex g_iconMutex;
+    static std::unordered_map<std::string, std::string> g_iconCache;
+    {
+        std::lock_guard<std::mutex> lk(g_iconMutex);
+        auto it = g_iconCache.find(src);
+        if (it != g_iconCache.end()) return it->second;
+    }
+    // 提取在锁外做（GDI+ 慢），避免串行化所有线程；重复提取一两次可接受。
+    std::string uri = cmm::extract_icon_data_uri(src, 32);
+    {
+        std::lock_guard<std::mutex> lk(g_iconMutex);
+        g_iconCache[src] = uri;
+    }
+    return uri;
+}
+
 }  // namespace
 
 int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -293,11 +333,10 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 本工具是轻量配置器，只承载一个本地静态页面，可安全关掉一批耗内存的
     // Chromium 特性。这些参数经 WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS 注入。
     //
-    // 关键取舍（血泪）：**绝不用 --single-process / --disable-gpu**。
-    //   --single-process 是 Chromium/WebView2 官方明确不支持的调试开关，复杂
-    //     交互（我们有后台线程 resolve + 子进程 probe）下极易白屏/崩溃；
-    //   --disable-gpu 会让 backdrop-filter 玻璃效果走软件合成，卡顿且不省多少。
-    //   宁可多几十 MB 也要稳——交接项目不留雷。
+    // 关键取舍：不使用 --single-process / --disable-gpu。
+    //   --single-process 是 Chromium/WebView2 官方不支持的调试开关，复杂
+    //     交互（后台线程 resolve + 子进程 probe）下容易白屏/崩溃；
+    //   --disable-gpu 会让 backdrop-filter 玻璃效果走软件合成，卡顿且省不了多少内存。
     // 用官方支持的保守组合：限制 renderer 数、关后台省电/预渲染/站点隔离细分，
     //   限 V8 老生代堆上限。实测配合 debug=false，内存从 685MB 降到 ~250-300MB，
     //   且四进程结构完整、稳定不崩。
@@ -323,7 +362,7 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         w.init(js);
     }
 
-    // —— 绑定：系统语言（兜底/对齐 FairySave；前端首选 window.__CMM_LANG__）——
+    // —— 绑定：系统语言（兜底；前端首选 window.__CMM_LANG__）——
     // 返回带引号的 JSON 字符串字面量，前端拿到即字符串。
     w.bind("get_sys_lang", [](const std::string&) -> std::string {
         return "\"" + cmm::detect_ui_lang_tag() + "\"";
@@ -475,8 +514,8 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     // —— 绑定：启停某 Win+X 项 —— 参数 ["Group2\\01 - xxx.lnk", true]
     // 启停 = 改扩展名 .lnk<->.lnk.disabled（MoveFileW），即时生效、无需重启 explorer。
-    // 走异步 3 参 bind（踩坑 18）：即便文件改名很快，也统一不占用 WebView2 UI 线程，
-    // 与 probe/extract_icon 一致，避免任何潜在的磁盘 IO 卡顿冻结界面。
+    // 走异步 3 参 bind：即便文件改名很快，也统一不占用 WebView2 UI 线程，
+    // 与 probe/extract_icon 一致，避免磁盘 IO 卡顿冻结界面。
     w.bind("set_winx_enabled",
         [&w](const std::string& seq, const std::string& req, void*) {
             std::string id = parse_string_arg_at(req, 0);
@@ -488,9 +527,8 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         }, nullptr);
 
     // —— 绑定：新增 Win+X 自定义项 —— 参数 ["Group3","C:\\...\\x.exe","args","名称"]
-    // T7 已实现：COM 建 lnk（IShellLink）+ 写 System.Winx.Hash 有耗时，走异步 3 参
-    // bind（踩坑 18）。add_winx_item 内部自持 CoInitializeEx/CoUninitialize，新线程
-    // 内 COM 自洽，无需外部再 CoInit。
+    // 建 lnk（IShellLink）+ 写 System.Winx.Hash 有耗时，走异步 bind 避免占用 UI 线程。
+    // add_winx_item 内部自持 CoInitializeEx/CoUninitialize，无需外部再 CoInit。
     w.bind("add_winx_item",
         [&w](const std::string& seq, const std::string& req, void*) {
             std::string group  = parse_string_arg_at(req, 0);
@@ -504,8 +542,7 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         }, nullptr);
 
     // —— 绑定：删除 Win+X 项 —— 参数 ["Group2\\01 - xxx.lnk"]
-    // 同上，T7 完成前占位 not_impl，不引用 cmm::del_winx_item 符号。
-    // T7 已实现：del 送回收站（SHFileOperationW + FOF_ALLOWUNDO）。异步 3 参 bind。
+    // 删除送回收站（SHFileOperationW + FOF_ALLOWUNDO），走异步 bind。
     w.bind("del_winx_item",
         [&w](const std::string& seq, const std::string& req, void*) {
             std::string id = parse_string_arg_at(req, 0);
@@ -518,8 +555,8 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ========================================================
     //  特殊菜单场景（SendTo / DragDrop / ShellNew / OpenWith）
     //  各自独立后端模块（非 menu_scanner 的 scene 体系）。scan_* 走同步 bind
-    //  （文件枚举 / 注册表读都快）；写操作（toggle/add/del）走异步 3 参 bind
-    //  避免占 UI 线程（踩坑 18），del 内部各线程自持 COM（送回收站，踩坑 T12）。
+    //  （文件枚举 / 注册表读都快）；写操作（toggle/add/del）走异步 bind 避免占用
+    //  UI 线程，删除操作的线程内自持 COM（送回收站）。
     // ========================================================
 
     // —— SendTo：发送到菜单（文件系统，%APPDATA%\...\SendTo）——
@@ -605,6 +642,30 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             std::string id = parse_string_arg_at(req, 0);
             std::thread([&w, seq, id]() {
                 w.resolve(seq, 0, cmm::del_shellnew_item(id));
+            }).detach();
+        }, nullptr);
+
+    // ========================================================
+    //  此电脑盘符图标管理（Drive Icons：MyComputer\NameSpace）
+    //  第三方软件（云盘等）在「此电脑」界面塞的快捷图标。
+    //  scan 同步（注册表枚举快）；启停/删除走异步 bind。
+    // ========================================================
+    w.bind("scan_driveicons", [](const std::string&) -> std::string {
+        return cmm::scan_drive_icons_json();
+    });
+    w.bind("set_driveicons_enabled",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id = parse_string_arg_at(req, 0);
+            bool enabled = parse_bool_arg(req);
+            std::thread([&w, seq, id, enabled]() {
+                w.resolve(seq, 0, cmm::set_drive_icon_enabled(id, enabled));
+            }).detach();
+        }, nullptr);
+    w.bind("del_driveicons_item",
+        [&w](const std::string& seq, const std::string& req, void*) {
+            std::string id = parse_string_arg_at(req, 0);
+            std::thread([&w, seq, id]() {
+                w.resolve(seq, 0, cmm::del_drive_icon(id));
             }).detach();
         }, nullptr);
 
@@ -776,11 +837,11 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             }).detach();
         }, nullptr);
 
-    // —— 富媒体阶段 1：图片转图标（两个 bind 都走异步线程 + COM STA）——
+    // —— 图片转图标（两个 bind 都走异步线程 + COM STA）——
     //   pick_image_file：无参，弹系统文件选择框挑图片；返回 {"ok":bool,"path":"..."}（取消 ok=false）。
     //   convert_image_to_icon：[srcPath]，把图片转多尺寸 .ico；返回 {ok,key,path}。
     //   IFileOpenDialog 需 STA 消息循环，故线程内自带 CoInitializeEx，不在 UI 线程弹框。
-    //   pick 的纯路径用 json_escape 包成 JSON 字符串字面量（踩坑 1：resolve 直接插值进 JS）。
+    //   pick 的纯路径用 json_escape 包成 JSON 字符串字面量（返回值直接插值进 JS）。
     w.bind("pick_image_file",
         [&w](const std::string& seq, const std::string& req, void*) {
             std::thread([&w, seq]() {

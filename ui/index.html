@@ -149,7 +149,7 @@
     border-radius:50%; transition:color var(--dur-quick), background var(--dur-quick); }
   .search-box .s-clear:hover{ color:var(--fg); background:var(--glass-fill-strong); }
   /* 搜索结果下拉：跨场景跳转结果，左对齐、场景标签 + 高亮命中 + 目标副行 */
-  .search-pop{ left:0; right:auto; width:340px; max-height:60vh; overflow-y:auto;
+  .search-pop{ inset-inline-start:0; inset-inline-end:auto; width:340px; max-height:60vh; overflow-y:auto;
     top:calc(100% + 6px); padding:5px; }
   .search-pop .search-empty{ padding:12px; font-size:12.5px; color:var(--fg-dim); text-align:center; }
   .search-pop .search-count{ padding:6px 10px 4px; font-size:11px; color:var(--fg-dim); }
@@ -182,7 +182,7 @@
   .icon-pill .arrow{ font-size:9px; transition:transform var(--dur-quick) var(--ease-snap); }
   .icon-pill.open .arrow{ transform:rotate(180deg); }
 
-  .popover{ position:absolute; top:calc(100% + 6px); right:0; min-width:150px; padding:5px;
+  .popover{ position:absolute; top:calc(100% + 6px); inset-inline-end:0; min-width:150px; padding:5px;
     border-radius:var(--radius-sm); z-index:30; display:flex; flex-direction:column; gap:2px;
     /* .glass 基座背景太淡，深底上弹层看不清。这里盖一层更实的底色 + 加重模糊/描边/阴影，
        保证主题切换、语言切换弹层在任何背景上都清晰可读。
@@ -192,7 +192,9 @@
                linear-gradient(rgba(255,255,255,.06),rgba(255,255,255,.06));
     -webkit-backdrop-filter:blur(20px) saturate(180%); backdrop-filter:blur(20px) saturate(180%);
     border:1px solid var(--glass-stroke);
-    box-shadow:0 12px 32px rgba(0,0,0,.55),var(--inset-glass); }
+    box-shadow:0 12px 32px rgba(0,0,0,.55),var(--inset-glass);
+    /* 16 门语言可能超出视口高度，限高并滚动。 */
+    max-height:min(60vh,420px); overflow-y:auto; }
   .popover .opt{ padding:8px 11px; border-radius:7px; font-size:12.5px; color:var(--fg-muted); cursor:pointer;
     display:flex; align-items:center; gap:8px;
     transition:background var(--dur-quick), color var(--dur-quick); }
@@ -247,7 +249,7 @@
   .scene-vsep{ height:1px; margin:6px 4px;
     background:linear-gradient(90deg,var(--glass-stroke),transparent); }
 
-  /* Win+X 场景占位（数据接线归 T10）/ Win+X placeholder, data wired in T10 */
+  /* Win+X 场景占位 / Win+X placeholder */
   .winx-placeholder{ padding:40px 24px; text-align:center; color:var(--fg-muted);
     font-size:13px; line-height:1.8; }
   .winx-placeholder .big-glyph{ font-size:34px; color:var(--fg-dim); margin-bottom:12px; }
@@ -332,7 +334,7 @@
   .spv-parent .nm{ font-size:13px; font-weight:500; white-space:nowrap; }
   .spv-parent .arr{ font-size:10px; color:var(--fg-dim); }
   /* 飞出列：紧贴父项右侧 */
-  .spv-flyout{ margin-left:6px; min-width:220px; max-width:340px;
+  .spv-flyout{ margin-inline-start:6px; min-width:220px; max-width:340px;
     background:var(--glass-fill-strong,rgba(30,34,44,.92)); border:1px solid var(--glass-stroke);
     border-radius:var(--radius-sm); padding:4px; box-shadow:0 10px 34px rgba(0,0,0,.4);
     backdrop-filter:blur(20px); align-self:flex-start; }
@@ -348,17 +350,17 @@
   .spv-row .g .glyph-img{ width:18px; height:18px; object-fit:contain; }
   .spv-row .nm{ font-size:12.5px; color:var(--fg); white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis; }
-  .spv-row .nm .sys{ font-size:9px; margin-left:5px; padding:0 4px; border-radius:3px;
+  .spv-row .nm .sys{ font-size:9px; margin-inline-start:5px; padding:0 4px; border-radius:3px;
     border:1px solid var(--glass-stroke); color:var(--fg-dim); vertical-align:middle; }
   .spv-row .sw{ flex-shrink:0; }
-  .spv-row .ro{ font-size:10px; color:var(--fg-dim); padding-right:2px; }
+  .spv-row .ro{ font-size:10px; color:var(--fg-dim); padding-inline-end:2px; }
   .spv-row .del{ width:22px; height:22px; display:inline-flex; align-items:center;
     justify-content:center; border-radius:5px; border:1px solid transparent;
     color:var(--fg-dim); cursor:pointer; font-size:12px; background:transparent; }
   .spv-row .del:hover{ border-color:var(--warn); color:var(--warn); }
   .spv-row .del:disabled{ opacity:.35; cursor:not-allowed; }
   .spv-empty{ padding:10px 12px; font-size:12px; color:var(--fg-muted); }
-  .sp-sys{ margin-left:7px; font-size:10px; color:var(--fg-muted); padding:1px 6px;
+  .sp-sys{ margin-inline-start:7px; font-size:10px; color:var(--fg-muted); padding:1px 6px;
     border-radius:8px; background:var(--glass-fill); border:1px solid var(--glass-stroke); }
   .sp-readonly{ flex-shrink:0; font-size:11px; color:var(--fg-muted); padding:2px 8px;
     border-radius:8px; background:var(--glass-fill); border:1px solid var(--glass-stroke); }
@@ -1052,7 +1054,7 @@
                   </span>
                   <span class="wi-meta">
                     <span class="wi-name">{{ spLabel(it) }}<span v-if="it.system" class="sp-sys">{{ t('sp.sys') }}</span></span>
-                    <span class="wi-target" :title="it.target || it.command || it.ext">{{ it.target || it.command || it.ext }}</span>
+                    <span class="wi-target" :title="scene==='driveicons' ? it.dllPath : (it.target || it.command || it.ext)">{{ scene==='driveicons' ? it.dllPath : (it.target || it.command || it.ext) }}</span>
                   </span>
                   <!-- openwith 只读：不渲染开关，标注只读 -->
                   <span v-if="it.canToggle === false" class="sp-readonly">{{ t('sp.readonly') }}</span>
@@ -1060,7 +1062,7 @@
                     <span class="switch" :class="{on: it.enabled}"
                           @click="spToggle(it)"><span class="knob"></span></span>
                   </span>
-                  <button v-if="scene==='sendto' || (scene==='openwith' && !it.system) || (scene==='shellnew' && !it.system)" class="wi-del" @click="spDel(it)" :disabled="busy" :title="t('winx.del')">
+                  <button v-if="scene==='sendto' || (scene==='openwith' && !it.system) || (scene==='shellnew' && !it.system) || scene==='driveicons'" class="wi-del" @click="spDel(it)" :disabled="busy" :title="t('winx.del')">
                     <span class="ic">⌫</span>
                   </button>
                 </div>
@@ -1285,7 +1287,7 @@
               <span>{{ t('list.name') }}</span>
               <span>{{ t('list.source') }}</span>
               <span style="text-align:center">{{ t('list.enabled') }}</span>
-              <span style="text-align:right">{{ t('list.actions') }}</span>
+              <span style="text-align:end">{{ t('list.actions') }}</span>
             </div>
             <div v-for="it in items" :key="it.id" class="lrow" :data-item-id="it.id">
               <span>
@@ -1807,619 +1809,17 @@
   <div v-if="toast.msg" class="toast" :class="{err: toast.kind==='err', ok: toast.kind==='ok'}">{{ toast.msg }}</div>
 </div>
 
+<script src="./i18n.js"></script>
 <script>
 // ============================================================
-//  i18n 字典：zh-CN（简）/ zh-TW（繁）/ en（英）。
-//  后端给英文 key，前端字典翻译。三档结构镜像，缺键显示原始 key。
-//  i18n dictionaries — back-end returns english keys, front-end translates.
+//  i18n 字典与内建项友好名：从 i18n.js 取（独立成文件，便于扩充语言）。
+//  后端给英文 key，前端字典翻译；缺键 t() 回退 en 再回退原 key。
+//  window.CMM_I18N / CMM_LANGS / CMM_RTL_LANGS / CMM_BUILTIN_NAMES 均由 i18n.js 挂载。
 // ============================================================
-const i18n = {
-  'zh-CN': {
-    brand:{ zh:'鼠标右键主理人', en:'Context Menu Master' },
-    nav:{ editor:'菜单编辑', win11:'Windows 11 专区', about:'关于', richmedia:'富媒体', grp_common:'常用场景', grp_submenu:'二级菜单', grp_winx:'快捷入口' },
-    status:{ classic:'经典菜单', modern:'新版菜单' },
-    theme:{ system:'跟随系统', light:'浅色', dark:'深色', preview_scope:'预览菜单主题' },
-    scene:{
-      desktop:'桌面空白', file:'文件', folder:'文件夹',
-      folder_bg:'文件夹空白', drive:'驱动器', recycle:'回收站',
-      allfsobjects:'所有文件对象', computer:'此电脑', library:'库',
-      winx:'Win+X 菜单', winx_todo:'Win+X 菜单管理开发中',
-      sendto:'发送到', shellnew:'新建', dragdrop:'拖放处理', openwith:'打开方式',
-      filetype:'文件类型',
-    },
-    winx:{
-      slogan:'Win+X 菜单（按 Win+X 或右键开始按钮弹出）。项按分组排列，Group3 在最上。启停 = 改快捷方式扩展名，随时可逆；新增项会自动写入 explorer 认可的 hash 后显示。',
-      refresh:'重新扫描', add:'新增项',
-      loading:'正在枚举 Win+X 快捷方式…',
-      empty:'未找到 Win+X 项（可能系统无此目录）。',
-      group_empty:'（此组下无项）',
-      del:'删除此项', del_title:'删除 Win+X 项', del_desc:'确定删除「{name}」？文件将送入回收站，可从回收站还原。',
-      del_ok:'已删除（已送回收站）', add_ok:'已新增（重扫 Win+X 生效）',
-      add_title:'新增 Win+X 项',
-      add_group:'所属分组', add_target:'目标路径', add_target_ph:'如 C:\\\\Windows\\\\System32\\\\cmd.exe',
-      add_args:'启动参数（可选）', add_args_ph:'如 /k dir',
-      add_name:'显示名称', add_name_ph:'菜单里显示的名字',
-      need_target:'请填写目标路径', need_name:'请填写显示名称',
-    },
-    sp:{
-      sendto_slogan:'右键「发送到」子菜单的项（存于 %APPDATA%\\Microsoft\\Windows\\SendTo）。停用＝加 .disabled 后缀，可逆；可新增指向任意程序/文件夹的项。',
-      dragdrop_slogan:'拖放处理程序：右键拖拽文件到文件夹/驱动器松开时弹出的菜单由它们决定。停用＝子键搬到 -DragDropHandlers，可逆。按对象类分组。',
-      shellnew_slogan:'右键「新建」子菜单的项（带 ShellNew 的扩展名）。停用＝ ShellNew 子键改名为 -ShellNew，可逆。写前自动备份注册表。',
-      openwith_slogan:'右键「打开方式」候选应用（注册在 Applications 下）。停用＝写 NoOpenWith（应用从列表隐藏），可逆；可新增指向任意程序的项（写当前用户）。系统项（HKLM）不可删，用户新增项可删。',
-      sendto_empty:'未发现「发送到」项（或找不到 SendTo 目录）。',
-      dragdrop_empty:'未发现拖放处理程序。',
-      shellnew_empty:'未发现带 ShellNew 的扩展名。',
-      openwith_empty:'未发现注册在 Applications 下的应用。',
-      add:'新增项', readonly:'只读', sys:'系统', unknown_type:'文件',
-      visual_section:'菜单预览（可直接启停/删除）', detail_section:'详细列表',
-      add_title:'新增「发送到」项', add_target:'目标路径', add_name:'显示名称',
-      sendto_add_title:'新增「发送到」项', openwith_add_title:'新增「打开方式」应用',
-      shellnew_add_title:'新增「新建」项', add_ext:'扩展名', add_ext_ph:'如 .md（含点，会建空文件模板）',
-      add_target_ph:'程序/文件夹/文档的完整路径', add_name_ph:'菜单里显示的名字',
-      need_target:'请填写目标路径', need_name:'请填写显示名称', need_ext:'请填写扩展名（如 .md）',
-      add_ok:'新增成功',
-      del_title:'删除此项', del_desc:'确定删除「{name}」？文件将送到回收站，可还原。',
-      del_desc_ow:'确定删除「{name}」？该应用项将移到 .deleted（可手动恢复），不影响系统关联。',
-      del_desc_sn:'确定删除「{name}」的新建项？仅移除用户层 ShellNew，系统内建类型不受影响。',
-      del_ok:'已删除',
-    },
-    ft:{
-      slogan:'管理某个具体扩展名的右键菜单项。先输入扩展名（如 .txt / .jpg / .zip）扫描，聚合四类注册表根：扩展名直挂、ProgID 关联、SystemFileAssociations\\.ext、感知类型。启停可逆（verb 加 LegacyDisable / handler 搬家），自建项写当前用户，写前自动备份。',
-      ext_ph:'输入扩展名，如 .txt / .jpg / .zip', scan:'扫描', add:'新增项', backup:'备份此类型',
-      ext:'扩展名', perceived:'感知类型',
-      prompt:'输入一个扩展名后点「扫描」，查看并管理该文件类型的右键菜单项。',
-      bad_ext:'扩展名非法（需以点开头、不含空格或路径分隔符）。',
-      empty:'该扩展名下未发现可管理的右键菜单项。',
-      need_ext:'请输入扩展名（如 .txt）',
-      add_title:'新增文件类型右键项（写当前用户）',
-      edit_title:'编辑文件类型右键项',
-      add_ok:'新增成功', del_title:'删除自建项', del_ok:'已删除',
-      del_desc:'确定删除「{name}」？此项由本工具创建（当前用户层），将从注册表移除，不影响系统关联。',
-      root_ext:'扩展名', root_progid:'ProgID', root_sfaext:'系统关联', root_sfaperceived:'感知类型',
-    },
-    search:{
-      placeholder:'搜索所有菜单项…', empty:'无匹配项', count:'{n} 个结果',
-    },
-    editor:{
-      slogan:'可视化与列表双视图实时同步。点名称改名、点图标换图标，列表里批量勾选管理。所有改动只写当前用户注册表（HKCU），随时可逆。',
-      view_visual:'可视化视图', view_list:'列表视图',
-      cap_win11:'新版菜单（默认）', cap_classic:'经典菜单（显示更多选项）',
-      expands_to:'展开为',
-      refresh:'重新扫描', backup:'手动备份',
-      loading:'正在从注册表读取真实菜单项…',
-      empty:'该场景下未发现可管理的菜单项。',
-      click_rename:'点击改名', rename_locked:'此项不支持改名（COM 扩展由 DLL 运行时决定名字）',
-      change_icon:'点击换图标', icon_locked:'此项不支持换图标',
-      system_item:'系统内置项（改动会有二次确认）',
-      visual_hint:'左为 Windows 11 新版菜单（系统管控，仅预览不可改），点「显示更多选项」展开为右侧经典菜单 · 经典菜单可点名称改名、点图标换图标，右键单击可改名 / 换图标 / 启停',
-      icon_source_label:'图标源（dll,-id 或 .ico 路径）',
-      icon_source_ph:'如 imageres.dll,-5350 或 C:\\\\Windows\\\\xxx.ico',
-      icon_fallback_label:'兜底字符（找不到图标时显示）',
-      modern_readonly:'只读',
-      modern_readonly_tip:'新版菜单由系统管控，只接纳系统内建命令与带包标识的扩展，注册表改不动，此处仅预览',
-      submenu_empty:'（此折叠组下无子项）',
-      item_disabled:'此项当前为禁用状态',
-    },
-    modern:{
-      view:'查看', sort_by:'排序方式', refresh:'刷新', new:'新建',
-      open:'打开', open_with:'打开方式', compress:'压缩为',
-      empty_recycle:'清空回收站',
-    },
-    magic:{
-      title:'批量魔法：', placeholder:'输入要追加的后缀',
-      selected:'已选 {n} 项', apply:'一键追加',
-    },
-    list:{ icon:'图标', name:'菜单名称', source:'来源', enabled:'启用', actions:'操作', rename:'改名', icon_btn:'图标' },
-    ctxmenu:{ enable:'启用此项', disable:'停用此项' },
-    source:{ verb:'明文项', com:'COM 扩展' },
-    win11:{
-      slogan:'Windows 11 把传统右键菜单折叠进了「显示更多选项」。在这里一键找回完整经典菜单。',
-      classic_title:'经典 / 新版右键菜单', now_classic:'当前：经典菜单', now_modern:'当前：新版菜单',
-      classic_desc:'仅写入当前用户注册表（HKCU），无需管理员权限，随时可逆。',
-      action_title:'一键互换', action_desc:'切换后会优雅重启资源管理器，桌面与任务栏会闪一下，菜单瞬间生效，无需注销重登。',
-      toggle:'经典 ⇄ 新版 互换', enable:'切到经典菜单', restore:'恢复新版菜单', refresh:'刷新状态',
-      warn:'提示：操作会短暂重启 explorer.exe（桌面/任务栏会闪一下），属正常现象。',
-      sparse_section:'新版菜单扩展', sparse_title:'Win11 IExplorerCommand 稀疏包扫描',
-      sparse_desc:'扫描并接管 Windows 11 新版菜单里由稀疏包（MSIX）注册的 IExplorerCommand 扩展项。接口已预留，开发中。',
-      coming_soon:'开发中',
-      show_more:'显示更多选项',
-      tool_cut:'剪切', tool_copy:'复制', tool_paste:'粘贴', tool_rename:'重命名', tool_share:'共享', tool_delete:'删除', tool_properties:'属性',
-      list_desc:'枚举本机 Windows 11 现代菜单项：第三方稀疏包（MSIX）注册的扩展可启停，系统内置命令只读展示。',
-      grp_packaged:'第三方扩展（可启停）', grp_system:'系统内置命令（只读）',
-      empty_packaged:'未发现第三方现代菜单扩展', empty_system:'无可展示的系统命令',
-      list_warn:'启停通过写入 Shell Extensions 黑名单实现，改动后需重启资源管理器（explorer.exe）生效。系统内置命令只读，误封锁可能导致现代菜单整体回退到经典菜单。',
-      applied:'已切换，正在重启资源管理器使其生效…',
-      right_click_hint:'右键此项进行启停',
-      preview_section:'菜单预览', preview_hint:'下面是启用的现代菜单扩展在 Win11 右键菜单里的大致样子（只读示意，启停在下方列表操作）。',
-      preview_empty:'当前没有启用的第三方现代菜单项。', demo_open:'打开',
-    },
-    custom:{
-      add:'新建菜单项', edit:'编辑', del:'删除',
-      add_title:'新建自定义右键项', edit_title:'编辑自定义右键项',
-      f_label:'显示名称', f_label_ph:'右键菜单里显示的文字',
-      f_kind:'执行类型',
-      kind_program:'运行程序（选中项作参数）', kind_folder:'打开文件夹', kind_url:'打开网址', kind_command:'自定义命令行（高级）',
-      f_target:'目标', f_target_ph:'程序/文件夹的完整路径，如 C:\\\\Windows\\\\System32\\\\notepad.exe',
-      f_target_url_ph:'网址，如 https://example.com',
-      f_icon:'图标（可选）', f_icon_ph:'图标路径，如 exe 路径 或 C:\\\\x.ico，留空则无图标',
-      pick_image:'选图片',
-      f_position:'位置', pos_default:'默认', pos_top:'置于菜单顶部', pos_bottom:'置于菜单底部',
-      save:'保存', need_label:'请填写显示名称', need_target:'请填写目标',
-      del_title:'删除自定义项', del_desc:'确定删除「{name}」？此项由本工具创建，将直接从注册表移除。',
-    },
-    richmedia:{
-      title:'富媒体右键扩展',
-      intro:'本工具特色：右键文件时显示带缩略图的菜单项。装富媒体扩展后，右键图片直接看缩略图，右键文件夹/压缩包看内容子菜单。',
-      preview_title:'效果预览',
-      preview_desc:'选一张图片，预览富媒体扩展装好后右键菜单项的样子。',
-      pick_image:'选图片预览',
-      loading:'处理中…',
-      hint:'↑ 装扩展后右键文件即出此项，左侧为真实缩略图',
-      status_title:'安装状态',
-      status_body:'富媒体扩展尚未注册到系统。<br>真机安装：管理员运行 <code>regsvr32 CmmShellExt.dll</code> → 重启资源管理器。<br>卸载：<code>regsvr32 /u CmmShellExt.dll</code>。<br>护栏：压缩包超 200MB 或枚举超 800ms 自动降级为普通项，不卡右键。',
-    },
-    about:{
-      body:'在 Windows 11 上重新主理你的鼠标右键菜单。可视化编辑、批量管理、一键找回经典菜单。<br>纯本地运行，只改当前用户注册表，随时可逆。',
-      tech_title:'技术栈',
-      tech_body:'现代 C++17 + Win32 API 后端，Microsoft Edge WebView2 承载界面，FairyGlass 液态玻璃皮肤。',
-      info_title:'作者与版本',
-      author_label:'作者', version_label:'版本', license_label:'协议', repo_label:'项目主页',
-      author_value:'恒烈 / Henglie',
-    },
-    common:{ cancel:'取消', confirm:'确认', apply:'应用', ok:'好的' },
-    confirm:{
-      sys_rename_title:'修改系统内置菜单项的名称？',
-      sys_rename_desc:'你正要改名的「<span class="strong">{name}</span>」是系统内置项。改名仅写入当前用户注册表（HKCU），不会影响其他用户，随时可恢复。已为你自动备份原始注册表。',
-      sys_disable_title:'停用系统内置菜单项？',
-      sys_disable_desc:'即将停用「<span class="strong">{name}</span>」。停用仅在当前用户生效，可随时打开。已为你自动备份原始注册表。',
-      sys_icon_title:'更换系统内置菜单项的图标？',
-      sys_icon_desc:'即将给「<span class="strong">{name}</span>」更换图标。仅写入当前用户注册表，可随时恢复。已为你自动备份原始注册表。',
-    },
-    toast:{
-      ok:'操作成功，菜单已生效', already_done:'已是目标状态，无需改动',
-      registry_failed:'注册表写入失败', refresh_failed:'已改注册表但刷新失败，重新登录后生效',
-      magic_done:'已为 {n} 项追加后缀', magic_empty:'请先勾选要处理的菜单项',
-      backup_done:'已自动备份到本地：{path}', backup_failed:'备份失败',
-      icon_converted:'已转换为图标', icon_convert_failed:'图片转换图标失败',
-      cannot_rename:'此项不支持改名',
-      cannot_change_icon:'此项不支持换图标',
-      cannot_toggle:'此项不支持启停',
-      bad_scene:'场景无效', empty_label:'名字不能为空',
-      auto_backed_up:'已自动备份原始注册表',
-      load_failed:'读取注册表失败',
-      winx_failed:'操作失败', winx_root_missing:'找不到 Win+X 目录',
-      bad_id:'路径非法', not_winx_lnk:'不是有效的 Win+X 快捷方式',
-      not_found:'项目不存在', rename_failed:'启停失败（改扩展名出错）',
-      bad_arg:'参数不完整', bad_group:'分组名非法', bad_name:'名字含非法字符',
-      target_not_found:'目标程序不存在', already_exists:'同名项已存在',
-      create_failed:'创建快捷方式失败', hash_failed:'写入 hash 失败（explorer 可能不显示）',
-      delete_failed:'删除失败',
-      sp_failed:'操作失败', sendto_root_missing:'找不到「发送到」目录',
-      not_lnk:'仅快捷方式（.lnk）可换图标', icon_failed:'换图标失败',
-    },
-  },
-  'zh-TW': {
-    brand:{ zh:'滑鼠右鍵主理人', en:'Context Menu Master' },
-    nav:{ editor:'選單編輯', win11:'Windows 11 專區', about:'關於', richmedia:'富媒體', grp_common:'常用場景', grp_submenu:'二級選單', grp_winx:'快捷入口' },
-    status:{ classic:'經典選單', modern:'新版選單' },
-    theme:{ system:'跟隨系統', light:'淺色', dark:'深色', preview_scope:'預覽選單主題' },
-    scene:{
-      desktop:'桌面空白', file:'檔案', folder:'資料夾',
-      folder_bg:'資料夾空白', drive:'磁碟機', recycle:'資源回收筒',
-      allfsobjects:'所有檔案物件', computer:'本機', library:'媒體櫃',
-      winx:'Win+X 選單', winx_todo:'Win+X 選單管理開發中',
-      sendto:'傳送到', shellnew:'新增', dragdrop:'拖放處理', openwith:'開啟方式',
-      filetype:'檔案類型',
-    },
-    winx:{
-      slogan:'Win+X 選單（按 Win+X 或右鍵開始鈕彈出）。項目存於檔案系統（%LOCALAPPDATA%\\...\\WinX），非登錄檔；停用＝改副檔名為 .lnk.disabled，可逆。分組由下而上排（Group3 在選單最上）。',
-      refresh:'重新掃描', add:'新增項目',
-      loading:'正在讀取 Win+X 選單項…',
-      empty:'未發現 Win+X 選單項（或找不到 WinX 資料夾）。',
-      group_empty:'此分組下無項目',
-      del:'刪除此項',
-      del_title:'刪除 Win+X 項目', del_desc:'確定刪除「{name}」？檔案將送到資源回收筒，可還原。',
-      del_ok:'已刪除（送資源回收筒）', add_ok:'新增成功',
-      add_title:'新增 Win+X 項目',
-      add_group:'所屬分組', add_target:'目標路徑', add_target_ph:'如 C:\\\\Windows\\\\System32\\\\cmd.exe',
-      add_args:'啟動參數（可留空）', add_args_ph:'如 /k echo hi',
-      add_name:'顯示名稱', add_name_ph:'如 命令提示字元',
-      need_target:'目標路徑不能為空', need_name:'顯示名稱不能為空',
-    },
-    sp:{
-      sendto_slogan:'右鍵「傳送到」子選單。項目存於 %APPDATA%\\Microsoft\\Windows\\SendTo，停用＝加 .disabled 副檔名，可逆。可新增指向任意程式/資料夾的項目。',
-      dragdrop_slogan:'用滑鼠右鍵拖曳檔案放開時彈出的選單（複製到此處/移動到此處…）由這些拖放處理程式決定，分佈於資料夾/磁碟機等物件類。停用＝子鍵搬到 -DragDropHandlers，可逆。',
-      shellnew_slogan:'右鍵「新增」子選單的項目。某副檔名下有 ShellNew 鍵，「新增」裡就出現該類型。停用＝ShellNew 鍵搬到 -ShellNew，寫入前自動備份，可逆。',
-      openwith_slogan:'右鍵「開啟方式」候選程式（登錄於 Applications）。停用＝寫 NoOpenWith（程式從清單隱藏），可逆；可新增指向任意程式的項目（寫目前使用者）。系統項（HKLM）不可刪，使用者新增項可刪。',
-      sendto_empty:'未發現「傳送到」項目。',
-      dragdrop_empty:'未發現拖放處理程式。',
-      shellnew_empty:'未發現帶 ShellNew 的副檔名。',
-      openwith_empty:'未發現 Applications 下註冊的程式。',
-      add:'新增項目', readonly:'唯讀', sys:'系統', unknown_type:'未知類型',
-      visual_section:'選單預覽（可直接啟停/刪除）', detail_section:'詳細清單',
-      need_target:'目標路徑不能為空', need_name:'顯示名稱不能為空',
-      add_title:'新增「傳送到」項目',
-      sendto_add_title:'新增「傳送到」項目', openwith_add_title:'新增「開啟方式」程式',
-      shellnew_add_title:'新增「新增」類型', add_ext:'副檔名', add_ext_ph:'如 .md（含點）',
-      del_desc_sn:'確定移除「{name}」的「新增」項？只移除目前使用者層，系統內建類型不受影響。',
-      add_target:'目標路徑', add_target_ph:'如 D:\\工具\\xxx.exe',
-      add_name:'顯示名稱', add_name_ph:'選單裡顯示的名字',
-      add_ok:'新增成功',
-      del_title:'刪除此項目', del_desc:'確定刪除「{name}」？檔案將送到資源回收筒，可還原。',
-      del_desc_ow:'確定刪除「{name}」？該項會搬到 <b>.deleted</b> 備份鍵，可手動還原（僅限使用者自訂項）。',
-      del_ok:'已刪除（送資源回收筒）',
-    },
-    ft:{
-      slogan:'管理某個具體副檔名的右鍵選單項。先輸入副檔名（如 .txt / .jpg / .zip）掃描，聚合四類登錄檔根：副檔名直掛、ProgID 關聯、SystemFileAssociations\\.ext、感知類型。啟停可逆（verb 加 LegacyDisable / handler 搬家），自建項寫目前使用者，寫入前自動備份。',
-      ext_ph:'輸入副檔名，如 .txt / .jpg / .zip', scan:'掃描', add:'新增項', backup:'備份此類型',
-      ext:'副檔名', perceived:'感知類型',
-      prompt:'輸入一個副檔名後點「掃描」，檢視並管理該檔案類型的右鍵選單項。',
-      bad_ext:'副檔名非法（需以點開頭、不含空格或路徑分隔符）。',
-      empty:'該副檔名下未發現可管理的右鍵選單項。',
-      need_ext:'請輸入副檔名（如 .txt）',
-      add_title:'新增檔案類型右鍵項（寫目前使用者）',
-      edit_title:'編輯檔案類型右鍵項',
-      add_ok:'新增成功', del_title:'刪除自建項', del_ok:'已刪除',
-      del_desc:'確定刪除「{name}」？此項由本工具建立（目前使用者層），將從登錄檔移除，不影響系統關聯。',
-      root_ext:'副檔名', root_progid:'ProgID', root_sfaext:'系統關聯', root_sfaperceived:'感知類型',
-    },
-    search:{
-      placeholder:'搜尋所有右鍵選單項…',
-      empty:'無相符項目',
-      count:'{n} 個相符',
-    },
-    editor:{
-      slogan:'視覺化與清單雙檢視即時同步。點名稱改名、點圖示換圖示，清單裡批次勾選管理。所有變更只寫目前使用者登錄檔（HKCU），隨時可逆。',
-      view_visual:'視覺化檢視', view_list:'清單檢視',
-      cap_win11:'新版選單（預設）', cap_classic:'經典選單（顯示更多選項）',
-      expands_to:'展開為',
-      refresh:'重新掃描', backup:'手動備份',
-      loading:'正在從登錄檔讀取真實選單項…',
-      empty:'此場景下未發現可管理的選單項。',
-      click_rename:'點擊改名', rename_locked:'此項不支援改名（COM 擴充由 DLL 執行時決定名字）',
-      change_icon:'點擊換圖示', icon_locked:'此項不支援換圖示',
-      system_item:'系統內建項（變更會有二次確認）',
-      visual_hint:'左為 Windows 11 新版選單（系統管控，僅預覽不可改），按「顯示更多選項」展開為右側經典選單 · 經典選單可點名稱改名、點圖示換圖示，右鍵點擊可改名 / 換圖示 / 啟停',
-      icon_source_label:'圖示來源（dll,-id 或 .ico 路徑）',
-      icon_source_ph:'如 imageres.dll,-5350 或 C:\\\\Windows\\\\xxx.ico',
-      icon_fallback_label:'備援字元（找不到圖示時顯示）',
-      modern_readonly:'唯讀',
-      modern_readonly_tip:'新版選單由系統管控，只接納系統內建命令與帶套件標識的擴充，登錄檔改不動，此處僅預覽',
-      submenu_empty:'（此摺疊組下無子項）',
-      item_disabled:'此項目前為停用狀態',
-    },
-    modern:{
-      view:'檢視', sort_by:'排序方式', refresh:'重新整理', new:'新增',
-      open:'開啟', open_with:'開啟方式', compress:'壓縮為',
-      empty_recycle:'清空資源回收筒',
-    },
-    magic:{
-      title:'批次魔法：', placeholder:'輸入要追加的後綴',
-      selected:'已選 {n} 項', apply:'一鍵追加',
-    },
-    list:{ icon:'圖示', name:'選單名稱', source:'來源', enabled:'啟用', actions:'操作', rename:'改名', icon_btn:'圖示' },
-    ctxmenu:{ enable:'啟用此項', disable:'停用此項' },
-    source:{ verb:'明文項', com:'COM 擴充' },
-    win11:{
-      slogan:'Windows 11 把傳統右鍵選單摺疊進了「顯示更多選項」。在這裡一鍵找回完整經典選單。',
-      classic_title:'經典 / 新版右鍵選單', now_classic:'目前：經典選單', now_modern:'目前：新版選單',
-      classic_desc:'僅寫入目前使用者登錄檔（HKCU），無需系統管理員權限，隨時可逆。',
-      action_title:'一鍵互換', action_desc:'切換後會優雅重新啟動檔案總管，桌面與工作列會閃一下，選單瞬間生效，無需登出重登。',
-      toggle:'經典 ⇄ 新版 互換', enable:'切到經典選單', restore:'還原新版選單', refresh:'重新整理狀態',
-      warn:'提示：操作會短暫重新啟動 explorer.exe（桌面/工作列會閃一下），屬正常現象。',
-      sparse_section:'新版選單擴充', sparse_title:'Win11 IExplorerCommand 稀疏套件掃描',
-      sparse_desc:'掃描並接管 Windows 11 新版選單裡由稀疏套件（MSIX）註冊的 IExplorerCommand 擴充項。介面已預留，開發中。',
-      coming_soon:'開發中',
-      show_more:'顯示更多選項',
-      tool_cut:'剪下', tool_copy:'複製', tool_paste:'貼上', tool_rename:'重新命名', tool_share:'共用', tool_delete:'刪除', tool_properties:'內容',
-      list_desc:'管理 Win11 現代選單裡的具體項目：第三方擴充（PackagedCom）可啟停，系統命令唯讀。',
-      grp_packaged:'第三方擴充（可啟停）', grp_system:'系統命令（唯讀）',
-      empty_packaged:'未偵測到第三方 Win11 選單擴充', empty_system:'無系統現代選單項',
-      list_warn:'啟停後需重啟資源管理器（或登出重登）方能生效。系統命令唯讀：誤封鎖可能導致整個現代選單回退為經典選單。',
-      applied:'已切換，正在重啟資源管理器使其生效…',
-      right_click_hint:'右鍵此項進行啟停',
-      preview_section:'現代選單預覽', preview_hint:'下方是啟用中的擴充項在 Win11 現代右鍵選單裡的大致長相（唯讀示意，啟停請在下方清單操作）。',
-      preview_empty:'目前沒有啟用的第三方擴充項，現代選單只有系統內建項。', demo_open:'開啟',
-    },
-    custom:{
-      add:'新增選單項', edit:'編輯', del:'刪除',
-      add_title:'新增自訂右鍵項', edit_title:'編輯自訂右鍵項',
-      f_label:'顯示名稱', f_label_ph:'右鍵選單裡顯示的文字',
-      f_kind:'執行類型',
-      kind_program:'執行程式（選取項作參數）', kind_folder:'開啟資料夾', kind_url:'開啟網址', kind_command:'自訂命令列（進階）',
-      f_target:'目標', f_target_ph:'程式/資料夾的完整路徑，如 C:\\\\Windows\\\\System32\\\\notepad.exe',
-      f_target_url_ph:'網址，如 https://example.com',
-      f_icon:'圖示（可選）', f_icon_ph:'圖示路徑，如 exe 路徑 或 C:\\\\x.ico，留空則無圖示',
-      pick_image:'選圖片',
-      f_position:'位置', pos_default:'預設', pos_top:'置於選單頂部', pos_bottom:'置於選單底部',
-      save:'儲存', need_label:'請填寫顯示名稱', need_target:'請填寫目標',
-      del_title:'刪除自訂項', del_desc:'確定刪除「{name}」？此項由本工具建立，將直接從登錄檔移除。',
-    },
-    richmedia:{
-      title:'富媒體右鍵擴充',
-      intro:'本工具特色：右鍵檔案時顯示帶縮圖的選單項。裝富媒體擴充後，右鍵圖片直接看縮圖，右鍵資料夾/壓縮包看內容子選單。',
-      preview_title:'效果預覽',
-      preview_desc:'選一張圖片，預覽富媒體擴充裝好後右鍵選單項的樣子。',
-      pick_image:'選圖片預覽',
-      loading:'處理中…',
-      hint:'↑ 裝擴充後右鍵檔案即出此項，左側為真實縮圖',
-      status_title:'安裝狀態',
-      status_body:'富媒體擴充尚未註冊到系統。<br>真機安裝：管理員執行 <code>regsvr32 CmmShellExt.dll</code> → 重啟檔案總管。<br>卸載：<code>regsvr32 /u CmmShellExt.dll</code>。<br>護欄：壓縮包超 200MB 或列舉超 800ms 自動降級為普通項，不卡右鍵。',
-    },
-    about:{
-      body:'在 Windows 11 上重新主理你的滑鼠右鍵選單。視覺化編輯、批次管理、一鍵找回經典選單。<br>純本機執行，只改目前使用者登錄檔，隨時可逆。',
-      tech_title:'技術棧',
-      tech_body:'現代 C++17 + Win32 API 後端，Microsoft Edge WebView2 承載介面，FairyGlass 液態玻璃面板。',
-      info_title:'作者與版本',
-      author_label:'作者', version_label:'版本', license_label:'授權', repo_label:'專案首頁',
-      author_value:'恒烈 / Henglie',
-    },
-    common:{ cancel:'取消', confirm:'確認', apply:'套用', ok:'好的' },
-    confirm:{
-      sys_rename_title:'修改系統內建選單項的名稱？',
-      sys_rename_desc:'你正要改名的「<span class="strong">{name}</span>」是系統內建項。改名僅寫入目前使用者登錄檔（HKCU），不會影響其他使用者，隨時可恢復。已為你自動備份原始登錄檔。',
-      sys_disable_title:'停用系統內建選單項？',
-      sys_disable_desc:'即將停用「<span class="strong">{name}</span>」。停用僅在目前使用者生效，可隨時開啟。已為你自動備份原始登錄檔。',
-      sys_icon_title:'更換系統內建選單項的圖示？',
-      sys_icon_desc:'即將給「<span class="strong">{name}</span>」更換圖示。僅寫入目前使用者登錄檔，可隨時恢復。已為你自動備份原始登錄檔。',
-    },
-    toast:{
-      ok:'操作成功，選單已生效', already_done:'已是目標狀態，無需變更',
-      registry_failed:'登錄檔寫入失敗', refresh_failed:'已改登錄檔但重新整理失敗，重新登入後生效',
-      magic_done:'已為 {n} 項追加後綴', magic_empty:'請先勾選要處理的選單項',
-      backup_done:'已自動備份到本機：{path}', backup_failed:'備份失敗',
-      icon_converted:'已轉換為圖示', icon_convert_failed:'圖片轉換圖示失敗',
-      cannot_rename:'此項不支援改名',
-      cannot_change_icon:'此項不支援換圖示',
-      cannot_toggle:'此項不支援啟停',
-      bad_scene:'場景無效', empty_label:'名字不能為空',
-      auto_backed_up:'已自動備份原始登錄檔',
-      load_failed:'讀取登錄檔失敗',
-      winx_failed:'操作失敗', winx_root_missing:'找不到 Win+X 目錄',
-      bad_id:'路徑非法', not_winx_lnk:'不是有效的 Win+X 捷徑',
-      not_found:'項目不存在', rename_failed:'啟停失敗（改副檔名出錯）',
-      bad_arg:'參數不完整', bad_group:'分組名非法', bad_name:'名字含非法字元',
-      target_not_found:'目標程式不存在', already_exists:'同名項已存在',
-      create_failed:'建立捷徑失敗', hash_failed:'寫入 hash 失敗（explorer 可能不顯示）',
-      delete_failed:'刪除失敗',
-      sp_failed:'操作失敗', sendto_root_missing:'找不到「傳送到」資料夾', sendto_failed:'操作失敗',
-      not_lnk:'僅捷徑（.lnk）可換圖示', icon_failed:'換圖示失敗',
-      dragdrop_root_missing:'找不到拖放處理程式', shellnew_root_missing:'找不到新增選單項',
-    },
-  },
-  'en': {
-    brand:{ zh:'Context Menu Master', en:'Context Menu Master' },
-    nav:{ editor:'Menu Editor', win11:'Windows 11 Zone', about:'About', richmedia:'Rich Media', grp_common:'Common', grp_submenu:'Submenus', grp_winx:'Quick Access' },
-    status:{ classic:'Classic menu', modern:'New menu' },
-    theme:{ system:'System', light:'Light', dark:'Dark', preview_scope:'Preview menu theme' },
-    scene:{
-      desktop:'Desktop', file:'File', folder:'Folder',
-      folder_bg:'Folder bg', drive:'Drive', recycle:'Recycle Bin',
-      allfsobjects:'All file objects', computer:'This PC', library:'Library',
-      winx:'Win+X Menu', winx_todo:'Win+X menu management coming soon',
-      sendto:'Send To', shellnew:'New', dragdrop:'Drag & Drop', openwith:'Open With',
-      filetype:'File Type',
-    },
-    winx:{
-      slogan:'Win+X menu (the power-user menu on right-click Start / Win+X). Items live in the file system, not the registry: toggling renames .lnk / .lnk.disabled, fully reversible. Groups are shown top-down (Group3 first).',
-      refresh:'Rescan', add:'Add item',
-      loading:'Enumerating Win+X items…',
-      empty:'No Win+X items found (or the WinX folder is missing).',
-      group_empty:'(No items in this group)',
-      del:'Delete item',
-      del_title:'Delete this Win+X item?',
-      del_desc:'Deleting <b>{name}</b> sends its shortcut to the Recycle Bin — recoverable. Continue?',
-      del_ok:'Deleted (sent to Recycle Bin)',
-      add_title:'Add Win+X item',
-      add_group:'Group', add_target:'Target path', add_target_ph:'e.g. C:\\\\Windows\\\\System32\\\\cmd.exe',
-      add_args:'Arguments (optional)', add_args_ph:'e.g. /k cd C:\\\\',
-      add_name:'Display name', add_name_ph:'Name shown in the menu',
-      add_ok:'Added. Restart Explorer or re-open Win+X to see it.',
-      need_target:'Target path is required', need_name:'Display name is required',
-    },
-    sp:{
-      sendto_slogan:'The right-click "Send to" submenu. Items are files under %APPDATA%\\\\Microsoft\\\\Windows\\\\SendTo — not the registry. Toggling appends/removes a ".disabled" suffix, fully reversible. You can add a target as a new shortcut.',
-      dragdrop_slogan:'Drag-drop handlers: the menu (Copy here / Move here / Create shortcut…) shown when you right-drag a file onto a folder or drive. They are COM extensions grouped by object class; toggling moves the key to "-DragDropHandlers", reversible.',
-      shellnew_slogan:'The "New" submenu. An extension with a ShellNew key shows up as "New <type>". Toggling moves the ShellNew key to "-ShellNew" (backed up first), reversible. Adding a new file type is not supported here.',
-      openwith_slogan:'Apps registered under Applications, candidates for "Open with". Toggling writes/removes NoOpenWith (hides the app from the list), reversible. You can add an app (written to the current user); system (HKLM) items cannot be deleted, user-added ones can.',
-      sendto_empty:'No Send-to items found.',
-      dragdrop_empty:'No drag-drop handlers found.',
-      shellnew_empty:'No New-menu items found.',
-      openwith_empty:'No registered apps found.',
-      add:'Add item', readonly:'Read-only', sys:'System', unknown_type:'File',
-      visual_section:'Menu preview', detail_section:'Item details',
-      sendto_add_title:'Add a Send-to item', openwith_add_title:'Add an Open-with app',
-      shellnew_add_title:'Add a "New" file type', add_ext:'Extension', add_ext_ph:'e.g. .md (with the dot)',
-      del_desc_sn:'Remove the "New" entry for <b>{name}</b>? Only the current-user layer is removed; built-in system types are unaffected.',
-      add_title:'Add a Send-to item',
-      add_target:'Target', add_target_ph:'Full path to an app / folder / file',
-      add_name:'Display name', add_name_ph:'Name shown in the menu',
-      need_target:'Target path is required', need_name:'Display name is required',
-      add_ok:'Added', del_ok:'Deleted (sent to Recycle Bin)',
-      del_title:'Delete this item?',
-      del_desc:'Deleting <b>{name}</b> sends its file to the Recycle Bin — recoverable. Continue?',
-      del_desc_ow:'Delete <b>{name}</b>? The app entry moves to a ".deleted" mirror (recoverable). Continue?',
-    },
-    ft:{
-      slogan:'Manage the right-click menu for a specific file extension. Enter an extension (e.g. .txt / .jpg / .zip) to scan; items are aggregated from four registry roots: the extension key, its ProgID, SystemFileAssociations\\.ext, and the perceived type. Toggling is reversible (LegacyDisable for verbs, key move for handlers); custom items are written to the current user, with an automatic backup first.',
-      ext_ph:'Enter an extension, e.g. .txt / .jpg / .zip', scan:'Scan', add:'Add item', backup:'Back up this type',
-      ext:'Extension', perceived:'Perceived type',
-      prompt:'Enter an extension and click Scan to view and manage its right-click menu items.',
-      bad_ext:'Invalid extension (must start with a dot, no spaces or path separators).',
-      empty:'No manageable right-click menu items found for this extension.',
-      need_ext:'Please enter an extension (e.g. .txt)',
-      add_title:'Add a file-type item (written to current user)',
-      edit_title:'Edit custom file-type item',
-      add_ok:'Added', del_title:'Delete custom item', del_ok:'Deleted',
-      del_desc:'Delete "{name}"? This item was created by this tool (current-user layer) and will be removed from the registry; system associations are unaffected.',
-      root_ext:'Extension', root_progid:'ProgID', root_sfaext:'System assoc', root_sfaperceived:'Perceived',
-    },
-    search:{
-      placeholder:'Search all menus…',
-      empty:'No matches',
-      count:'{n} results',
-    },
-    editor:{
-      slogan:'Visual and list views stay in sync. Click a name to rename, click an icon to change it; batch-manage in the list. All changes go to the current-user registry (HKCU) and are fully reversible.',
-      view_visual:'Visual view', view_list:'List view',
-      cap_win11:'New menu (default)', cap_classic:'Classic menu (Show more options)',
-      expands_to:'expands to',
-      refresh:'Rescan', backup:'Backup',
-      loading:'Reading real menu items from the registry…',
-      empty:'No manageable items in this scene.',
-      click_rename:'Click to rename', rename_locked:'Rename not supported (COM handler — name resolved by DLL at runtime)',
-      change_icon:'Click to change icon', icon_locked:'Icon change not supported for this item',
-      system_item:'System item (a confirm dialog will appear)',
-      visual_hint:'Left is the Windows 11 new menu (system-managed — preview only, not editable); "Show more options" expands into the classic menu on the right, where you can click a name to rename, click an icon to change it, or right-click a row to rename / change icon / enable-disable.',
-      icon_source_label:'Icon source (dll,-id or .ico path)',
-      icon_source_ph:'e.g. imageres.dll,-5350 or C:\\\\Windows\\\\xxx.ico',
-      icon_fallback_label:'Fallback glyph (shown when no real icon)',
-      modern_readonly:'Read-only',
-      modern_readonly_tip:'The new menu is system-managed — it only accepts built-in shell commands and package-identified extensions. The registry cannot touch it; this is preview only.',
-      submenu_empty:'(No items in this submenu group)',
-      item_disabled:'This item is disabled',
-    },
-    modern:{
-      view:'View', sort_by:'Sort by', refresh:'Refresh', new:'New',
-      open:'Open', open_with:'Open with', compress:'Compress to',
-      empty_recycle:'Empty Recycle Bin',
-    },
-    magic:{
-      title:'Batch Magic:', placeholder:'Suffix to append',
-      selected:'{n} selected', apply:'Append to all',
-    },
-    list:{ icon:'Icon', name:'Menu Item', source:'Source', enabled:'Enabled', actions:'Actions', rename:'Rename', icon_btn:'Icon' },
-    ctxmenu:{ enable:'Enable item', disable:'Disable item' },
-    source:{ verb:'Verb', com:'COM ext' },
-    win11:{
-      slogan:'Windows 11 hides the classic context menu behind "Show more options". Bring it back in one click.',
-      classic_title:'Classic / New Context Menu', now_classic:'Now: Classic menu', now_modern:'Now: New menu',
-      classic_desc:'Writes only to the current-user registry (HKCU). No admin rights, fully reversible.',
-      action_title:'One-Click Swap', action_desc:'After switching, Explorer restarts gracefully — the desktop and taskbar flash briefly and the menu takes effect instantly.',
-      toggle:'Swap Classic ⇄ New', enable:'Switch to Classic', restore:'Restore New Menu', refresh:'Refresh status',
-      warn:'Note: this briefly restarts explorer.exe (desktop/taskbar will flash). This is expected.',
-      sparse_section:'New Menu Extensions', sparse_title:'Win11 IExplorerCommand Sparse-Package Scan',
-      sparse_desc:'Scan and manage IExplorerCommand items registered via sparse (MSIX) packages in the Win11 new menu. Interface reserved, in development.',
-      coming_soon:'In development',
-      show_more:'Show more options',
-      tool_cut:'Cut', tool_copy:'Copy', tool_paste:'Paste', tool_rename:'Rename', tool_share:'Share', tool_delete:'Delete', tool_properties:'Properties',
-      list_desc:'Manage individual items in the Win11 modern menu: third-party extensions (PackagedCom) can be toggled; system commands are read-only.',
-      grp_packaged:'Third-party extensions (toggleable)', grp_system:'System commands (read-only)',
-      empty_packaged:'No third-party Win11 menu extensions detected', empty_system:'No system modern-menu items',
-      list_warn:'Toggling takes effect after restarting Explorer (or signing out and back in). System commands are read-only: blocking the wrong one may make the entire modern menu fall back to the classic menu.',
-      applied:'Toggled. Restarting Explorer to apply…',
-      right_click_hint:'Right-click to enable/disable',
-      preview_section:'Modern menu preview', preview_hint:'A mockup of the Win11 right-click modern menu. Shows enabled third-party extensions (read-only — toggle them in the list below).',
-      preview_empty:'No enabled third-party extensions yet — the preview shows only the system built-in items.', demo_open:'Open',
-    },
-    custom:{
-      add:'New item', edit:'Edit', del:'Delete',
-      add_title:'New custom menu item', edit_title:'Edit custom menu item',
-      f_label:'Display name', f_label_ph:'Name shown in the menu',
-      f_kind:'Action type',
-      kind_program:'Program', kind_folder:'Open folder', kind_url:'Open URL', kind_command:'Custom command',
-      f_target:'Target',
-      f_target_ph:'Program / folder path, or command line',
-      f_target_url_ph:'e.g. https://example.com',
-      f_icon:'Icon (optional)', f_icon_ph:'e.g. C:\\\\Windows\\\\System32\\\\notepad.exe or icon.ico',
-      pick_image:'Pick image',
-      f_position:'Position', pos_default:'Default', pos_top:'Top', pos_bottom:'Bottom',
-      save:'Save', need_label:'Please enter a display name', need_target:'Please enter a target',
-      del_title:'Delete custom item', del_desc:'Delete “{name}”? This custom menu item will be removed from the registry (reversible by re-creating it).',
-    },
-    richmedia:{
-      title:'Rich-Media Shell Extension',
-      intro:'Signature feature: right-click files to show menu items with real thumbnails. With the extension installed, right-click an image to see its thumbnail, or a folder/archive to see a content submenu.',
-      preview_title:'Preview',
-      preview_desc:'Pick an image to preview how the rich-media menu item looks after installation.',
-      pick_image:'Pick image to preview',
-      loading:'Processing…',
-      hint:'↑ After install, right-click a file shows this item with a real thumbnail on the left',
-      status_title:'Installation Status',
-      status_body:'Rich-media extension is not registered.<br>Install: run <code>regsvr32 CmmShellExt.dll</code> as admin → restart Explorer.<br>Uninstall: <code>regsvr32 /u CmmShellExt.dll</code>.<br>Safeguard: archives over 200MB or enumeration over 800ms auto-degrade to a plain item, never freezes the menu.',
-    },
-    about:{
-      body:'Take charge of your right-click menu on Windows 11. Visual editing, batch management, one-click classic-menu restore.<br>Runs fully local, touches only the current-user registry, fully reversible.',
-      tech_title:'Tech Stack',
-      tech_body:'Modern C++17 + Win32 API backend, Microsoft Edge WebView2 for the UI, FairyGlass liquid-glass skin.',
-      info_title:'Author & Version',
-      author_label:'Author', version_label:'Version', license_label:'License', repo_label:'Repository',
-      author_value:'Henglie',
-    },
-    common:{ cancel:'Cancel', confirm:'Confirm', apply:'Apply', ok:'OK' },
-    confirm:{
-      sys_rename_title:'Rename a system menu item?',
-      sys_rename_desc:'"<span class="strong">{name}</span>" is a system item. Renaming only writes to the current-user registry (HKCU); other users are unaffected. The original registry has been automatically backed up.',
-      sys_disable_title:'Disable a system menu item?',
-      sys_disable_desc:'About to disable "<span class="strong">{name}</span>". The change only applies to your account and can be reverted any time. The original registry has been automatically backed up.',
-      sys_icon_title:'Change the icon of a system item?',
-      sys_icon_desc:'About to change the icon of "<span class="strong">{name}</span>". Writes only to the current-user registry, fully reversible. The original registry has been automatically backed up.',
-    },
-    toast:{
-      ok:'Done — the menu is now in effect', already_done:'Already in the target state, no change needed',
-      registry_failed:'Registry write failed', refresh_failed:'Registry changed but refresh failed — applies after re-login',
-      magic_done:'Appended suffix to {n} item(s)', magic_empty:'Select some menu items first',
-      backup_done:'Backed up locally: {path}', backup_failed:'Backup failed',
-      icon_converted:'Converted to icon', icon_convert_failed:'Image-to-icon conversion failed',
-      cannot_rename:'This item does not support rename',
-      cannot_change_icon:'This item does not support icon change',
-      cannot_toggle:'This item does not support toggling',
-      bad_scene:'Invalid scene', empty_label:'Name cannot be empty',
-      auto_backed_up:'Original registry auto-backed up',
-      load_failed:'Failed to read registry',
-      winx_failed:'Operation failed', winx_root_missing:'Win+X folder not found',
-      bad_id:'Invalid path', not_winx_lnk:'Not a valid Win+X shortcut',
-      not_found:'Item not found', rename_failed:'Toggle failed (rename error)',
-      bad_arg:'Missing arguments', bad_group:'Invalid group name', bad_name:'Name has invalid characters',
-      target_not_found:'Target program not found', already_exists:'An item with this name exists',
-      create_failed:'Failed to create shortcut', hash_failed:'Failed to write hash (Explorer may hide it)',
-      delete_failed:'Delete failed',
-      sp_failed:'Operation failed', sendto_root_missing:'SendTo folder not found',
-      not_lnk:'Only shortcuts (.lnk) support icon change', icon_failed:'Icon change failed',
-    },
-  },
-};
+const i18n = window.CMM_I18N;
+const BUILTIN_NAMES = window.CMM_BUILTIN_NAMES;
+const CMM_RTL_LANGS = window.CMM_RTL_LANGS;
 
-// ============================================================
-//  Windows 内建项友好名映射（三语兜底）。
-//  后端已尽力从注册表解析真实 label，但有些 Windows 内建项注册表里只有
-//  裸键名（如 find / removeproperties）或英文 COM 描述（如 "Open With Context
-//  Menu Handler"），系统本身没给本地化中文名。这里按 id / label 兜底补一层。
-//  —— 只收录确属 Windows 内建的项；第三方扩展无法穷举，保持后端清洗后的原样。
-//  —— 后端不返回中文（i18n 红线），所以映射放前端，跟随当前语言。
-//
-//  Front-end localization fallback for Windows built-in items whose registry
-//  carries only a bare verb key or an English COM description (the OS ships no
-//  localized name). Keyed by lowercased verb id / handler label. Third-party
-//  extensions are left as the back-end cleaned them.
-// ============================================================
-const BUILTIN_NAMES = {
-  // —— 按 verb id（小写）匹配 / matched by lowercased verb id ——
-  verb: {
-    'find':             { 'zh-CN':'查找…',       'zh-TW':'尋找…',       en:'Find…' },
-    'explore':          { 'zh-CN':'展开',         'zh-TW':'展開',        en:'Explore' },
-    'removeproperties': { 'zh-CN':'删除属性和个人信息', 'zh-TW':'移除內容和個人資訊', en:'Remove Properties' },
-    'pintohome':        { 'zh-CN':'固定到快速访问', 'zh-TW':'釘選到快速存取', en:'Pin to Quick access' },
-  },
-  // —— 按后端清洗后的 label（小写）匹配 handler / matched by lowercased handler label ——
-  handler: {
-    'open with context menu handler': { 'zh-CN':'打开方式',       'zh-TW':'開啟方式',       en:'Open with' },
-    'shell extensions for sharing':   { 'zh-CN':'共享',           'zh-TW':'共用',           en:'Share' },
-    'work folders context menu handler': { 'zh-CN':'工作文件夹',  'zh-TW':'工作資料夾',     en:'Work Folders' },
-    'taskband pin':                   { 'zh-CN':'固定到任务栏',   'zh-TW':'釘選到工作列',   en:'Pin to taskbar' },
-    'start menu pin':                 { 'zh-CN':'固定到「开始」屏幕', 'zh-TW':'釘選到開始畫面', en:'Pin to Start' },
-    'previous versions property page':{ 'zh-CN':'以前的版本',     'zh-TW':'以前的版本',     en:'Restore previous versions' },
-    'new menu handler':               { 'zh-CN':'新建',           'zh-TW':'新增',           en:'New' },
-    'offline files':                  { 'zh-CN':'脱机文件',       'zh-TW':'離線檔案',       en:'Offline Files' },
-    'enhanced storage context menu handler': { 'zh-CN':'增强型存储', 'zh-TW':'增強型存放區', en:'Enhanced Storage' },
-    'shellfolder for cd burning':     { 'zh-CN':'刻录到光盘',     'zh-TW':'燒錄到光碟',     en:'Burn to disc' },
-    'encryption context menu':        { 'zh-CN':'加密',           'zh-TW':'加密',           en:'Encrypt' },
-    // —— 第三方 COM 扩展（IContextMenu）：注册表只有 CLSID + DLL，子项/文字由 DLL
-    //    运行时 QueryContextMenu 动态生成，静态扫描读不到。这里给已知的常见扩展兜个
-    //    本地化友好名，至少不显示英文 COM 描述。第三方无法穷举，按需补行。——
-    'quark ai context menu':          { 'zh-CN':'夸克AI',          'zh-TW':'夸克AI',          en:'Quark AI' },
-  },
-};
 
 const { createApp } = Vue;
 
@@ -2428,11 +1828,7 @@ const app = createApp({
     return {
       // 语言 / Language. 优先 C++ 注入的 window.__CMM_LANG__，其次 localStorage，最后 en。
       lang: 'en',
-      langs: [
-        { code:'zh-CN', name:'简体中文' },
-        { code:'zh-TW', name:'繁體中文' },
-        { code:'en',    name:'English' },
-      ],
+      langs: window.CMM_LANGS,
       showLang: false,
 
       // 主题：三态 system / light / dark，存 localStorage。
@@ -2448,7 +1844,7 @@ const app = createApp({
 
       tab: 'editor',
       // 版本号与 CMake project(VERSION) 保持一致；页脚与关于页共用。
-      appVersion: '0.5',
+      appVersion: '0.6',
       repoUrl: 'https://github.com/Henglie/ContextMenuMaster',
 
       // 6 场景 / 6 scenes —— 后端 sceneId 与此一一对应。
@@ -2467,17 +1863,18 @@ const app = createApp({
       // sendto/openwith 文件系统或注册表列表；dragdrop 拖放 handler；shellnew 新建菜单。
       // Special-menu scenes with their own binds (not scan_scene). Separate nav group.
       specialScenes: [
-        { id:'sendto',   glyph:'➤' },
-        { id:'shellnew', glyph:'✚' },
-        { id:'dragdrop', glyph:'⇲' },
-        { id:'openwith', glyph:'◪' },
+        { id:'sendto',     glyph:'➤' },
+        { id:'shellnew',   glyph:'✚' },
+        { id:'dragdrop',   glyph:'⇲' },
+        { id:'openwith',   glyph:'◪' },
+        { id:'driveicons', glyph:'▣' },
       ],
       scene: 'desktop',
       sceneCounts: {},        // { sceneId: 项数 } —— tab 角标 / count badge per scene tab
 
       // 全局搜索（标题栏跳转搜索器，非页面内筛选）。searchIndex 是所有场景项的扁平
       // 缓存池，由 prefetchCounts 顺带填充（后台已 scan 各场景）；输入即在内存里匹配
-      // 名称/id/命令/CLSID，选中跳转到对应场景并高亮，不每次访问后端（同参考项目思路）。
+      // 名称/id/命令/CLSID，选中跳转到对应场景并高亮，不每次访问后端。
       // Global search: a title-bar jump searcher over an in-memory index of all
       // scene items (built by prefetchCounts), matching name/id/command/clsid.
       search: '',             // 搜索框输入
@@ -2594,6 +1991,8 @@ const app = createApp({
     },
     // 当前特殊场景是否支持新增项（sendto / openwith / shellnew）。
     spCanAdd() { return this.scene === 'sendto' || this.scene === 'openwith' || this.scene === 'shellnew'; },
+    // 当前特殊场景是否支持删除项（driveicons 支持一键删除第三方图标）。
+    spCanDel() { return this.scene === 'sendto' || this.scene === 'openwith' || this.scene === 'shellnew' || this.scene === 'driveicons'; },
     // 特殊场景可视化父项的字形（取 specialScenes 元数据）。
     spGlyph() { const s = this.specialScenes.find(x => x.id === this.scene); return s ? s.glyph : '▸'; },
 
@@ -2717,17 +2116,25 @@ const app = createApp({
         if (window.open_url) await window.open_url(this.repoUrl);
       } catch (e) { /* 静默：打不开不影响主功能 */ }
     },
+    // 切语言时同步 <html> 的 lang / dir。ar/he 从右向左，置 dir=rtl 触发整体镜像，
+    // CSS 用逻辑属性（margin-inline 等）自动跟随。其余语言 ltr。
+    applyLangAttrs(lang) {
+      document.documentElement.lang = lang;
+      const rtl = CMM_RTL_LANGS.indexOf(lang) !== -1;
+      document.documentElement.dir = rtl ? 'rtl' : 'ltr';
+    },
     initLang() {
       const saved = localStorage.getItem('cmm_lang');
       const injected = window.__CMM_LANG__;
       let lang = saved || injected || 'en';
       if (!i18n[lang]) lang = 'en';
       this.lang = lang;
-      document.documentElement.lang = lang;
+      this.applyLangAttrs(lang);
     },
     setLang(code) {
       this.lang = code; this.showLang = false;
       localStorage.setItem('cmm_lang', code);
+      this.applyLangAttrs(code);
     },
 
     // —— 主题 —— 三态：system 时跟随系统 prefers-color-scheme；
@@ -2819,7 +2226,7 @@ const app = createApp({
       this.winxLoading = true;
       try {
         if (!window.scan_winx) { this.winxGroups = []; this.winxLoaded = true; return; }
-        // bind 返回值已是数组（踩坑 1：勿 JSON.parse）。
+        // bind 返回值已是数组，勿再 JSON.parse。
         const arr = await window.scan_winx();
         const groups = Array.isArray(arr) ? arr : [];
         // 给每项补前端临时字段：icon 由 extract_icon 异步填。
@@ -2908,7 +2315,7 @@ const app = createApp({
       this.spItems = [];
       try {
         if (!window[fnName]) { this.spItems = []; this.spLoaded[id] = true; return; }
-        // bind 返回值已是数组（踩坑 1：勿 JSON.parse）。
+        // bind 返回值已是数组，勿再 JSON.parse。
         const arr = await window[fnName]();
         const list = Array.isArray(arr) ? arr : [];
         for (const it of list) it.icon = '';
@@ -2987,9 +2394,11 @@ const app = createApp({
       const scene = this.scene;
       const bindName = scene === 'openwith' ? 'del_openwith_item'
                      : scene === 'shellnew' ? 'del_shellnew_item'
+                     : scene === 'driveicons' ? 'del_driveicons_item'
                      : 'del_sendto_item';
       const descKey = scene === 'openwith' ? 'sp.del_desc_ow'
                     : scene === 'shellnew' ? 'sp.del_desc_sn'
+                    : scene === 'driveicons' ? 'di.del_desc'
                     : 'sp.del_desc';
       this.askConfirm(
         this.t('sp.del_title'),
@@ -3006,7 +2415,7 @@ const app = createApp({
       );
     },
 
-    // 从后端 scan_scene 拿真实菜单项。bind 返回值已是数组（踩坑 1：勿 JSON.parse）。
+    // 从后端 scan_scene 拿真实菜单项。bind 返回值已是数组，勿再 JSON.parse。
     // Pull real items from scan_scene. Bind already returns the array — no JSON.parse.
     async loadScene(id) {
       this.loading = true; this.items = [];
@@ -3046,7 +2455,11 @@ const app = createApp({
       // 后端已异步化（子进程在后台线程跑，不阻塞 UI），前端可并发全部探测，
       // 总耗时从「串行 N×250ms」压到「单次 ~250ms」。探测结果按 clsid 缓存，
       // 切回已探测过的场景直接复用，不重复起子进程（修卡顿/加载迟缓）。
-      const targets = list.filter(it => it.kind === 'handler' && it.clsid);
+      // ⚠ 必须遍历 this.items（Vue3 reactive 代理）而非入参 list（原始对象）：
+      // applyProbed 直接改属性，改在原始对象上会绕过 proxy set 陷阱，Vue 不重渲染，
+      // COM 动态子菜单探到也不显示。listSnapshotId 期间可能被切场景重置，故先取一次。
+      const live = this.items;
+      const targets = live.filter(it => it.kind === 'handler' && it.clsid);
       await Promise.all(targets.map(async (it) => {
         // 命中缓存直接用，跳过子进程。
         const cached = this._probeCache[it.clsid];
@@ -3144,7 +2557,7 @@ const app = createApp({
           for (const it of list) {
             index.push({ scene: sc.id, id: it.id,
               label: it.friendlyName || it.label || it.ext || it.id || '',
-              target: it.target || '', command: it.command || '',
+              target: it.target || it.dllPath || '', command: it.command || '',
               clsid: it.clsid || '', kind: it.kind || '' });
           }
         } catch (e) { /* 忽略 */ }
@@ -3245,7 +2658,7 @@ const app = createApp({
     },
     // 特殊菜单场景（sendto/dragdrop/shellnew/openwith）项显示名，各自兜底：
     //  - shellnew：后端给 friendlyName（系统本地化关联名，可空）+ ext，前端拼「友好名 (.ext)」；
-    //    无友好名时用 i18n「未知类型」+ ext，绝不在后端拼中文（踩坑 8）。
+    //    无友好名时用 i18n「未知类型」+ ext，中文拼接一律在前端，后端只给数据。
     //  - dragdrop：项带 kind='handler'，走 BUILTIN_NAMES.handler 本地化兜底（同经典 handler）。
     //  - 其余（sendto/openwith）：label 已是文件名/应用名，直接用。
     spLabel(it) {
@@ -3259,6 +2672,9 @@ const app = createApp({
         const key = (it.label || '').toLowerCase();
         const e = BUILTIN_NAMES.handler[key];
         if (e) return e[this.lang] || e.en;
+        return it.label || it.id;
+      }
+      if (this.scene === 'driveicons') {
         return it.label || it.id;
       }
       return it.label || it.id;
@@ -3295,6 +2711,8 @@ const app = createApp({
     // 兜底字符：fixed 项用自己的 glyph；handler 多是 COM 扩展给 ▸；verb 给 ■。
     // Fallback glyph: fixed items carry their own; handler -> ▸; verb -> ■.
     fallbackGlyph(it) {
+      // 用户在字符选择器里挑过字符时优先用它（pickGlyph 写入 _glyphChosen）。
+      if (it._glyphChosen) return it._glyphChosen;
       if (it.kind === 'fixed') return it.glyph || '■';
       return it.kind === 'handler' ? '▸' : '■';
     },
@@ -3596,7 +3014,7 @@ const app = createApp({
       if (!window.scan_win11) return;
       this.win11Loading = true;
       try {
-        const arr = await window.scan_win11();   // bind 返回即数组（踩坑 1）
+        const arr = await window.scan_win11();   // bind 返回即数组，勿再 parse
         const list = Array.isArray(arr) ? arr : [];
         for (const it of list) it.icon = '';
         this.win11Items = list;
@@ -3732,7 +3150,7 @@ const app = createApp({
         this.richPreview = { loading:false, path:'', name:'', dataUri:'', error:true };
       }
     },
-    // 富媒体阶段 1：弹文件选择框挑图片 → 转多尺寸 .ico → 回填到指定弹层的 icon 字段。
+    // 弹文件选择框挑图片 → 转多尺寸 .ico → 回填到指定弹层的 icon 字段。
     // which 为弹层 state 名（'ftAdd' / 'customEdit' / 'spEdit'）。
     // field 为回填字段名，默认 'icon'；spEdit 图标存在 value 字段故传 'value'。
     async pickImageFor(which, field) {
@@ -3840,7 +3258,8 @@ const app = createApp({
     spCtxCanDel(it) {
       return this.scene === 'sendto'
         || (this.scene === 'openwith' && !it.system)
-        || (this.scene === 'shellnew' && !it.system);
+        || (this.scene === 'shellnew' && !it.system)
+        || this.scene === 'driveicons';
     },
     doToggle() { return this.runMenuOp(window.toggle_classic_menu); },
     doEnable() { return this.runMenuOp(window.enable_classic_menu); },

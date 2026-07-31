@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(ContextMenuMaster
-    VERSION 0.5.0
+    VERSION 0.6.0
     LANGUAGES CXX
 )
 
@@ -66,6 +66,7 @@ add_library(cmm_core STATIC
     src/platform/windows/win11menu.cpp
     src/platform/windows/custom_menu.cpp
     src/platform/windows/filetype_menu.cpp
+    src/platform/windows/drive_icons.cpp
     src/platform/windows/image_icon.cpp
 )
 
@@ -94,6 +95,7 @@ endif()
 # ============================================================
 add_executable(ContextMenuMaster WIN32
     src/app/gui_main.cpp
+    res/app.rc
 )
 target_link_libraries(ContextMenuMaster PRIVATE cmm_core)
 
