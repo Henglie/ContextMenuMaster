@@ -42,11 +42,11 @@
     <td width="50%"><img src="docs/screenshots/win11-zone.png" alt="Windows 11 专区" /><br/><sub>Windows 11 专区：经典/新版菜单一键互换，优雅重启 Explorer</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/shellnew.png" alt="新建 ShellNew 场景" /><br/><sub>新建（ShellNew）：管理「新建」子菜单里出现哪些文件类型</sub></td>
+    <td width="50%"><img src="docs/screenshots/about.png" alt="新建 ShellNew 场景" /><br/><sub>新建（ShellNew）：管理「新建」子菜单里出现哪些文件类型</sub></td>
     <td width="50%"><img src="docs/screenshots/desktop-visual.png" alt="桌面空白可视化" /><br/><sub>桌面空白：可视化视图 1:1 仿真右键菜单</sub></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><img src="docs/screenshots/about.png" alt="关于页" width="50%" /><br/><sub>关于：版本 / 协议 / 作者与项目主页</sub></td>
+    <td colspan="2" align="center"><img src="docs/screenshots/shellnew.png" alt="关于页" width="50%" /><br/><sub>关于：版本 / 协议 / 作者与项目主页</sub></td>
   </tr>
 </table>
 
@@ -175,7 +175,7 @@ Win11 默认右键把常用项藏进「显示更多选项」，每次多点一�
 2. 逐项启停：关掉不想在「新建」里看到的类型。
 3. 启停走「搬到停用镜像」，随时可原样搬回。
 
-![新建 ShellNew 管理](docs/screenshots/shellnew.png)
+![新建 ShellNew 管理](docs/screenshots/about.png)
 
 ### 案例五：加一个自己的右键菜单项
 
