@@ -24,8 +24,9 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
-# 内部协作 / 交接 / 临时资料（多 Agent 开发过程文档，不进主仓库）
+# 内部协作 / 交接 / 临时资料（开发过程文档，不进主仓库）
 临时/
 临时Tool/
+PROGRESS.md
 多Agent协作.md
 交接-*.md

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  鼠标右键主理人 ContextMenuMaster —— 应用图标（矢量源）
+  Google Material Design 3 风格：圆角方块底 + 动态渐变，叠光标 + 右键菜单列表条。
+  概念：光标点出一张右键菜单。菜单条中有一条高亮，呼应「主理/编辑菜单项」。
+  多尺寸 .ico 由 res/make_icon.py 从本图概念用 PIL 重绘生成（16/32/48/64/128/256）。
+-->
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- M3 动态渐变：品牌蓝 → 青紫，左上到右下 -->
+    <linearGradient id="bg" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4d9fff"/>
+      <stop offset="0.55" stop-color="#3d7fe0"/>
+      <stop offset="1" stop-color="#6a5ae0"/>
+    </linearGradient>
+    <!-- 菜单卡片：近白，微冷调 -->
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eef2fb"/>
+    </linearGradient>
+  </defs>
+
+  <!-- M3 圆角方块底（squircle 近似，圆角半径约 22%） -->
+  <rect x="8" y="8" width="240" height="240" rx="56" ry="56" fill="url(#bg)"/>
+  <!-- 顶部高光，玻璃质感 -->
+  <rect x="8" y="8" width="240" height="120" rx="56" ry="56" fill="#ffffff" opacity="0.10"/>
+
+  <!-- 右键菜单卡片 -->
+  <g>
+    <rect x="70" y="60" width="118" height="128" rx="16" ry="16" fill="url(#card)"
+          stroke="#20305a" stroke-opacity="0.12" stroke-width="1"/>
+    <!-- 菜单条目：4 条，第 2 条高亮（品牌蓝胶囊） -->
+    <rect x="84" y="80"  width="90" height="12" rx="6" fill="#c3cede"/>
+    <rect x="80" y="100" width="98" height="18" rx="9" fill="#4d9fff"/>
+    <rect x="84" y="126" width="90" height="12" rx="6" fill="#c3cede"/>
+    <rect x="84" y="146" width="66" height="12" rx="6" fill="#c3cede"/>
+  </g>
+
+  <!-- 光标箭头（指向菜单，落在右下，白填深描边保证小尺寸可辨） -->
+  <g transform="translate(150,150)">
+    <path d="M0,0 L0,58 L15,44 L26,66 L38,60 L27,38 L48,38 Z"
+          fill="#ffffff" stroke="#20305a" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+</svg>
