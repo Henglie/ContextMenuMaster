@@ -19,6 +19,7 @@
 // ============================================================
 #pragma once
 #include <string>
+#include <windows.h>   // HICON
 
 namespace cmm {
 
@@ -46,5 +47,12 @@ std::string extract_icon_data_uri(const std::string& source, int px = 32);
 // Save an extracted icon as a PNG file on disk (CLI dumpicons helper).
 bool extract_icon_to_file(const std::string& source, int px,
                           const std::string& out_path);
+
+// 把现成 HICON 转 PNG 的 base64 data URI（"data:image/png;base64,..."）。
+// 用于拿不到「图标源字符串」、只有句柄的场景（如 SHGetFileInfoW 取到的
+// 真实磁盘图标——系统盘带 Windows 徽标、可移动盘是 U 盘造型）。
+// 失败返回空串。调用方负责 DestroyIcon(hIcon)。
+// Convert an existing HICON to a base64 PNG data URI (e.g. real drive icons).
+std::string extract_hicon_data_uri(HICON hIcon, int px = 32);
 
 }  // namespace cmm

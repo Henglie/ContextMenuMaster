@@ -1,14 +1,18 @@
 // ============================================================
-//  鼠标右键主理人 ContextMenuMaster —— 「此电脑」盘符图标管理（实现）
+//  鼠标右键主理人 ContextMenuMaster —— 「此电脑」仿真管理（实现）
 //
-//  管理 MyComputer\NameSpace 下的第三方 COM 命名空间扩展图标。
-//  扫描 HKLM + HKCU 两处（含启用/停用镜像），支持一键删除与启停搬家。
-//  写前自动备份；删键前 reg export 对应 CLSID 子树到本地备份目录。
+//  把「此电脑」界面 1:1 仿真：真实磁盘（图标 + 容量）与 MyComputer\NameSpace
+//  下的第三方 COM 命名空间扩展图标混合渲染。磁盘只读；ns 项可启停搬家
+//  （NameSpace ↔ -NameSpace）、可一键删除（删前 reg export 备份）。
 // ============================================================
 #include "platform/windows/drive_icons.h"
+#include "platform/windows/icon_extract.h"   // extract_hicon_data_uri（真实磁盘图标）
 
 #include <windows.h>
-#include <shlwapi.h>   // SHLoadIndirectString
+#include <shlwapi.h>      // SHLoadIndirectString
+#include <shlobj.h>       // SHChangeNotify / SHGetKnownFolderPath
+#include <knownfolders.h> // KNOWNFOLDERID
+#include <shellapi.h>     // SHGetFileInfoW
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -171,8 +175,7 @@ bool is_system_dll(const std::wstring& dllPath) {
 }
 
 // 取备份目录 %LOCALAPPDATA%\ContextMenuMaster\backups\。
-std::wstring ensure_backup_dir() {
-    wchar_t base[MAX_PATH] = {0};
+std::wstring ensure_backup_dir() {    wchar_t base[MAX_PATH] = {0};
     DWORD got = GetEnvironmentVariableW(L"LOCALAPPDATA", base, MAX_PATH);
     if (got == 0 || got >= MAX_PATH) return L"";
     std::wstring dir = base;
@@ -247,22 +250,68 @@ std::vector<std::wstring> enum_subkeys(HKEY hKey) {
     return out;
 }
 
+// 本地变体 CLSID → 对应 KnownFolder（FOLDERID）。
+// 「此电脑」NameSpace 里的系统文件夹分两类：真 FOLDERID（{374DE290} 下载、
+// {B4BFCC3A} 桌面…）与 CLSID_ThisPCLocal*RegFolder 本地变体（{088e3905} 本地下载、
+// {24ad3ad4} 本地文档…）。本地变体不在 FolderDescriptions、也不是 KnownFolder，
+// 显示名 = 对应 FOLDERID 的本地化名，故硬编码映射后统一走 KnownFolder API。
+static const struct { const wchar_t* clsid; const KNOWNFOLDERID* fid; } kLocalMap[] = {
+    { L"{088e3905-0323-4b02-9826-5d99428e115f}", &FOLDERID_Downloads },
+    { L"{374DE290-123F-4565-9164-39C4925E467B}", &FOLDERID_Downloads },
+    { L"{24ad3ad4-a569-4530-98e1-ab02f9417aa8}", &FOLDERID_Documents },
+    { L"{a8cdff1c-4878-43be-b5fd-f8091c1c60d0}", &FOLDERID_Documents },
+    { L"{3dfdfced-d30a-4a11-9d63-8321e6d5c7f1}", &FOLDERID_Pictures },
+    { L"{3add1653-eb32-4cb0-bbd7-dfa0abb5acca}", &FOLDERID_Pictures },
+    { L"{d3162b92-9365-467a-824b-07307d810a95}", &FOLDERID_Videos },
+    { L"{a0953c92-50dc-43bf-be83-3742fed03c9c}", &FOLDERID_Videos },
+    { L"{1cf1260c-4dd0-4ebb-811f-33c572699fde}", &FOLDERID_Music },
+    { L"{b4bfcc3a-db2c-424c-b029-7fe99a87c641}", &FOLDERID_Desktop },
+};
+
+// 取 KnownFolder 的本地化显示名（「下载」「文档」…随系统语言）。
+// SHGetKnownFolderPath 拿真实路径 → SHGetFileInfoW(DISPLAYNAME) 取 shell 名。
+std::wstring known_folder_display_name(const KNOWNFOLDERID* fid) {
+    if (!fid) return L"";
+    wchar_t* path = nullptr;
+    if (FAILED(SHGetKnownFolderPath(*fid, 0, nullptr, &path))) return L"";
+    std::wstring name;
+    SHFILEINFOW fi = {0};
+    if (SHGetFileInfoW(path, FILE_ATTRIBUTE_DIRECTORY, &fi, sizeof(fi),
+                       SHGFI_DISPLAYNAME) && fi.szDisplayName[0] != L'\0') {
+        name = fi.szDisplayName;
+    }
+    CoTaskMemFree(path);
+    return name;
+}
+
 // 从 CLSID 解析一个驱动图标的显示名与图标源。
-// 解析顺序：LocalizedString → 默认值 → CLSID 字符串兜底。
+// 解析顺序：硬编码 FOLDERID 映射 → HKCR\CLSID LocalizedString → 默认值 →
+// FolderDescriptions LocalizedName → SHCreateItemFromParsingName（shell 自解析
+// 任意命名空间对象）→ CLSID 字符串兜底。
 void resolve_clsid_info(const std::wstring& clsid,
                         std::wstring* outLabel,
                         std::wstring* outIcon,
                         std::wstring* outDll) {
+    std::wstring label;
+
+    // 0) 本地变体映射：直接拿对应 KnownFolder 的本地化名。
+    for (const auto& m : kLocalMap) {
+        if (CompareStringOrdinal(clsid.c_str(), -1, m.clsid, -1, TRUE) == CSTR_EQUAL) {
+            label = known_folder_display_name(m.fid);
+            break;
+        }
+    }
+
     std::wstring clsidKey = L"CLSID\\" + clsid;
     HKEY hClsid = nullptr;
     if (RegOpenKeyExW(HKEY_CLASSES_ROOT, clsidKey.c_str(), 0,
                       KEY_QUERY_VALUE, &hClsid) != ERROR_SUCCESS) {
-        *outLabel = clsid;
+        if (!label.empty()) { *outLabel = clean_label(label); }
+        else { *outLabel = clsid; }
         return;
     }
 
     // 显示名：LocalizedString 优先。
-    std::wstring label;
     std::wstring loc;
     if (reg_read_string(hClsid, L"LocalizedString", &loc) && !loc.empty()) {
         std::wstring r = resolve_indirect_string(loc);
@@ -275,6 +324,45 @@ void resolve_clsid_info(const std::wstring& clsid,
             else {
                 std::wstring r = resolve_indirect_string(def);
                 if (!r.empty() && r[0] != L'@') label = r;
+            }
+        }
+    }
+    // 系统内建文件夹（下载/文档/音乐/视频/图片/桌面）的 HKCR\CLSID 常只有
+    // DescriptionID/DefaultIcon，显示名在 KnownFolder 注册里 → 查
+    // FolderDescriptions\<clsid> 的 LocalizedName（@dll,-id 间接资源）。
+    // 注意：FolderDescriptions 的 Name 是英文内部标识（"Downloads"），不是
+    // 显示名，故只用 LocalizedName。
+    if (label.empty()) {
+        std::wstring fdKey =
+            L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\"
+            L"FolderDescriptions\\" + clsid;
+        HKEY hFd = nullptr;
+        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, fdKey.c_str(), 0,
+                          KEY_QUERY_VALUE, &hFd) == ERROR_SUCCESS) {
+            std::wstring name;
+            if (reg_read_string(hFd, L"LocalizedName", &name) && !name.empty()) {
+                std::wstring r = resolve_indirect_string(name);
+                if (!r.empty() && r[0] != L'@') label = r;
+            }
+            RegCloseKey(hFd);
+        }
+    }
+    // 兜底：SHCreateItemFromParsingName("::{CLSID}") 让 shell 自己解析
+    // 命名空间对象的本地化显示名（对真 FOLDERID 有效）。
+    if (label.empty()) {
+        std::wstring parse = L"::" + clsid;
+        IShellItem* item = nullptr;
+        if (SUCCEEDED(SHCreateItemFromParsingName(parse.c_str(), nullptr,
+                                                  IID_PPV_ARGS(&item)))) {
+            wchar_t* name = nullptr;
+            HRESULT hr = item->GetDisplayName(SIGDN_NORMALDISPLAY, &name);
+            item->Release();
+            if (SUCCEEDED(hr) && name && name[0] != L'\0') {
+                // 该 API 有时返回英文名（Music/Documents），本地化失败时
+                // 仍比 CLSID 强；若与 CLSID 同形（解析失败回显）则弃用。
+                if (CompareStringOrdinal(name, -1, clsid.c_str(), -1, TRUE) != CSTR_EQUAL)
+                    label = name;
+                CoTaskMemFree(name);
             }
         }
     }
@@ -335,7 +423,12 @@ void scan_hive(HKEY hive, bool isHKLM, std::vector<DriveIconItem>& items) {
         std::vector<std::wstring> clsidList = enum_subkeys(hNs);
         RegCloseKey(hNs);
         for (const std::wstring& clsid : clsidList) {
+            // DelegateFolders 是 NameSpace 下的特殊容器（委托命名空间），不是
+            // CLSID 图标项，跳过（否则会解析失败显示成数字）。
+            if (CompareStringOrdinal(clsid.c_str(), -1, L"DelegateFolders",
+                                     -1, TRUE) == CSTR_EQUAL) continue;
             DriveIconItem item;
+            item.kind = "ns";
             item.id = wide_to_utf8(clsid);
             item.fromHKLM = isHKLM;
             item.enabled = true;
@@ -345,6 +438,11 @@ void scan_hive(HKEY hive, bool isHKLM, std::vector<DriveIconItem>& items) {
             item.iconSource = wide_to_utf8(icon);
             item.dllPath = wide_to_utf8(dll);
             item.systemItem = is_system_dll(dll);
+            // 解析不出名字的系统项（如 shell32 内部命名空间）标 knownId=system，
+            // 前端 i18n 显示「系统组件」，避免数字 CLSID 暴露。
+            if (item.systemItem && !label.empty() && label[0] == L'{') {
+                item.knownId = "system";
+            }
             items.push_back(item);
         }
     }
@@ -367,6 +465,7 @@ void scan_hive(HKEY hive, bool isHKLM, std::vector<DriveIconItem>& items) {
             }
             if (dup) continue;
             DriveIconItem item;
+            item.kind = "ns";
             item.id = id;
             item.fromHKLM = isHKLM;
             item.enabled = false;
@@ -376,6 +475,9 @@ void scan_hive(HKEY hive, bool isHKLM, std::vector<DriveIconItem>& items) {
             item.iconSource = wide_to_utf8(icon);
             item.dllPath = wide_to_utf8(dll);
             item.systemItem = is_system_dll(dll);
+            if (item.systemItem && !label.empty() && label[0] == L'{') {
+                item.knownId = "system";
+            }
             items.push_back(item);
         }
     }
@@ -383,16 +485,81 @@ void scan_hive(HKEY hive, bool isHKLM, std::vector<DriveIconItem>& items) {
 
 }  // namespace
 
+// —— 真实磁盘枚举 ——
+// 磁盘类型 -> SHSTOCKICONID（前端 extract_icon 的 "stock:NN" 写法）。
+//   SIID_DRIVEFIXED=145, SIID_DRIVEREMOVABLE=146, SIID_DRIVENET=147,
+//   SIID_DRIVECD=148, SIID_DRIVERAM=149
+namespace {
+
+// 盘符类型转内部 type 字符串 + stock 图标 id。
+void drive_type_to_info(UINT driveType, std::string* type, int* stockIcon) {
+    switch (driveType) {
+        case DRIVE_REMOVABLE: *type = "removable"; *stockIcon = 146; break;
+        case DRIVE_REMOTE:    *type = "network";   *stockIcon = 147; break;
+        case DRIVE_CDROM:     *type = "cdrom";     *stockIcon = 148; break;
+        case DRIVE_RAMDISK:   *type = "ram";       *stockIcon = 149; break;
+        default:              *type = "fixed";     *stockIcon = 145; break;
+    }
+}
+
+// 取真实磁盘图标：SHGetFileInfoW 按盘符拿系统图标（系统盘带 Windows 徽标、
+// 可移动盘是 U 盘造型等），转 PNG data URI 内嵌给前端。失败返回空串。
+// SHGFI_USEFILEATTRIBUTES：未就绪的光驱等也能按属性返回通用图标。
+std::string drive_icon_data_uri(const std::wstring& root) {
+    SHFILEINFOW fi = {0};
+    if (!SHGetFileInfoW(root.c_str(), FILE_ATTRIBUTE_DIRECTORY, &fi, sizeof(fi),
+                        SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES) ||
+        !fi.hIcon) {
+        return "";
+    }
+    std::string uri = cmm::extract_hicon_data_uri(fi.hIcon, 32);
+    DestroyIcon(fi.hIcon);
+    return uri;
+}
+
+// 枚举全部真实磁盘（字母序）。失败盘符跳过（如未就绪的光驱）。
+void scan_drives(std::vector<DriveIconItem>& items) {
+    DWORD mask = GetLogicalDrives();
+    for (int i = 0; i < 26; ++i) {
+        if (!(mask & (1u << i))) continue;
+        wchar_t root[8];
+        wsprintfW(root, L"%c:\\", L'A' + i);
+        UINT t = GetDriveTypeW(root);
+        // 未知类型（驱动器不存在/未就绪）跳过。
+        if (t == DRIVE_UNKNOWN || t == DRIVE_NO_ROOT_DIR) continue;
+
+        std::string type;
+        int stockIcon = 145;
+        drive_type_to_info(t, &type, &stockIcon);
+
+        DriveIconItem item;
+        item.kind = "drive";
+        item.letter = wide_to_utf8(std::wstring(1, L'A' + i) + L":");
+        item.id = "drive:" + item.letter;
+        item.label = item.letter;   // 前端拼「本地磁盘 (C:)」
+        item.type = type;
+        char buf[32];
+        wsprintfA(buf, "stock:%d", stockIcon);
+        item.iconSource = buf;
+        item.iconData = drive_icon_data_uri(root);
+
+        // 容量。GetDiskFreeSpaceExW 拿 可用字节 + 总字节。
+        ULARGE_INTEGER freeAvail = {0}, total = {0}, totalFree = {0};
+        if (GetDiskFreeSpaceExW(root, &freeAvail, &total, &totalFree)) {
+            item.freeBytes  = freeAvail.QuadPart;
+            item.totalBytes = total.QuadPart;
+        }
+        items.push_back(std::move(item));
+    }
+}
+
+}  // namespace
+
 std::vector<DriveIconItem> scan_drive_icons() {
     std::vector<DriveIconItem> items;
+    scan_drives(items);
     scan_hive(HKEY_LOCAL_MACHINE, true, items);
     scan_hive(HKEY_CURRENT_USER, false, items);
-    // 排序：系统项在前，按 label 排。
-    std::sort(items.begin(), items.end(),
-              [](const DriveIconItem& a, const DriveIconItem& b) {
-                  if (a.systemItem != b.systemItem) return a.systemItem;
-                  return a.label < b.label;
-              });
     return items;
 }
 
@@ -402,9 +569,16 @@ std::string scan_drive_icons_json() {
     for (size_t i = 0; i < items.size(); ++i) {
         const DriveIconItem& it = items[i];
         if (i) out += ",";
-        out += "{\"id\":\"";         out += json_escape(it.id);          out += "\"";
+        out += "{\"kind\":\"";       out += json_escape(it.kind);        out += "\"";
+        out += ",\"id\":\"";         out += json_escape(it.id);          out += "\"";
+        out += ",\"letter\":\"";     out += json_escape(it.letter);      out += "\"";
+        out += ",\"type\":\"";       out += json_escape(it.type);        out += "\"";
         out += ",\"label\":\"";      out += json_escape(it.label);       out += "\"";
         out += ",\"iconSource\":\""; out += json_escape(it.iconSource);  out += "\"";
+        out += ",\"iconData\":\"";   out += json_escape(it.iconData);    out += "\"";
+        out += ",\"knownId\":\"";    out += json_escape(it.knownId);     out += "\"";
+        out += ",\"totalBytes\":";   out += std::to_string(it.totalBytes);
+        out += ",\"freeBytes\":";    out += std::to_string(it.freeBytes);
         out += ",\"dllPath\":\"";    out += json_escape(it.dllPath);     out += "\"";
         out += ",\"system\":";       out += it.systemItem ? "true" : "false";
         out += ",\"fromHKLM\":";     out += it.fromHKLM ? "true" : "false";
@@ -425,79 +599,79 @@ std::string set_drive_icon_enabled(const std::string& id, bool enabled) {
         clsid.find(L"..") != std::wstring::npos)
         return result_json(false, "bad_id");
 
-    // 先备份 CLSID 注册信息。
-    do_backup(clsid);
+    // 停用 = 删除 NameSpace 子键（explorer 不再显示）。-NameSpace 镜像对
+    // MyComputer 不可靠（实测 explorer 不认），改用删键 + 备份，可还原。
+    // 关键：同一 CLSID 可能 HKLM、HKCU 两处都注册（如百度网盘），必须全清，
+    // 只清一份合并视图仍显示（「关不掉」根因）。启用 = 重建 NameSpace 子键
+    // （默认值 = CLSID，explorer 从 HKCR\CLSID 解析显示名），并清理镜像残留。
+    // 写前自动备份 CLSID 注册信息（备份失败拒绝操作，确保可恢复）。
+    if (!do_backup(clsid)) return result_json(false, "backup_failed");
 
-    // 构造启用根和停用根路径。
-    std::wstring enPath = std::wstring(kNameSpacePath) + L"\\" + clsid;
-    std::wstring disPath = kNameSpacePath;
-    size_t pos = disPath.rfind(L"NameSpace");
-    if (pos == std::wstring::npos) return result_json(false, "registry_failed");
-    disPath.insert(pos, L"-");
-    disPath += L"\\";
-    disPath += clsid;
-
-    std::wstring srcPath = enabled ? disPath : enPath;
-    std::wstring dstPath = enabled ? enPath : disPath;
-
-    // 尝试在 HKLM 和 HKCU 里都找。
-    bool moved = false;
-    for (HKEY hive : { HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER }) {
-        // 源必须存在。
-        HKEY hProbe = nullptr;
-        if (RegOpenKeyExW(hive, srcPath.c_str(), 0, KEY_READ, &hProbe) != ERROR_SUCCESS)
-            continue;
-        RegCloseKey(hProbe);
-
-        // 复制到目标。
-        HKEY hSrc = nullptr;
-        HKEY hDst = nullptr;
-        DWORD disp = 0;
-        if (RegOpenKeyExW(hive, srcPath.c_str(), 0, KEY_READ, &hSrc) != ERROR_SUCCESS)
-            continue;
-        if (RegCreateKeyExW(hive, dstPath.c_str(), 0, nullptr,
-                            REG_OPTION_NON_VOLATILE, KEY_WRITE, nullptr,
-                            &hDst, &disp) != ERROR_SUCCESS) {
-            RegCloseKey(hSrc);
-            continue;
-        }
-        // 复制值。
-        bool ok = true;
-        for (DWORD i = 0; ok; ++i) {
-            DWORD cchName = 0, cbData = 0, type = 0;
-            LSTATUS st = RegEnumValueW(hSrc, i, nullptr, &cchName, nullptr,
-                                       &type, nullptr, &cbData);
-            if (st == ERROR_NO_MORE_ITEMS) break;
-            if (st != ERROR_SUCCESS && st != ERROR_MORE_DATA) { ok = false; break; }
-            std::vector<wchar_t> name(cchName + 1);
-            std::vector<BYTE> data(cbData ? cbData : 1);
-            DWORD cchName2 = cchName + 1, cbData2 = cbData;
-            st = RegEnumValueW(hSrc, i, name.data(), &cchName2, nullptr, &type,
-                               data.data(), &cbData2);
-            if (st != ERROR_SUCCESS) { ok = false; break; }
-            if (RegSetValueExW(hDst, name.data(), 0, type, data.data(),
-                               cbData2) != ERROR_SUCCESS) { ok = false; break; }
-        }
-        RegCloseKey(hDst);
-        RegCloseKey(hSrc);
-        if (!ok) continue;
-        // 删源。须检查返回值：删源失败不应报成功，否则项留在原位。
-        LSTATUS delSt = RegDeleteTreeW(hive, srcPath.c_str());
-        if (delSt != ERROR_SUCCESS) continue;
-        moved = true;
-    }
-
-    if (!moved) {
-        // 可能是已在目标态（幂等）。
+    if (enabled) {
+        // 启用：重建 NameSpace\{clsid}（写 HKLM，对所有用户生效），清 -NameSpace 残留。
+        bool created = false;
+        std::wstring enPath = std::wstring(kNameSpacePath) + L"\\" + clsid;
         for (HKEY hive : { HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER }) {
-            HKEY h = nullptr;
-            if (RegOpenKeyExW(hive, dstPath.c_str(), 0, KEY_READ, &h) == ERROR_SUCCESS) {
-                RegCloseKey(h);
-                return result_json(true, "already_done");
+            HKEY hKey = nullptr;
+            DWORD disp = 0;
+            if (RegCreateKeyExW(hive, enPath.c_str(), 0, nullptr,
+                                REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, nullptr,
+                                &hKey, &disp) == ERROR_SUCCESS) {
+                LSTATUS st = RegSetValueExW(
+                    hKey, nullptr, 0, REG_SZ,
+                    reinterpret_cast<const BYTE*>(clsid.c_str()),
+                    (DWORD)((clsid.size() + 1) * sizeof(wchar_t)));
+                RegCloseKey(hKey);
+                if (st == ERROR_SUCCESS) created = true;
             }
         }
-        return result_json(false, "registry_failed");
+        if (!created) return result_json(false, "registry_failed");
+        // 清理停用镜像残留。
+        std::wstring disRoot = kNameSpacePath;
+        size_t pos = disRoot.rfind(L"NameSpace");
+        if (pos != std::wstring::npos) {
+            disRoot.insert(pos, L"-");
+            std::wstring disPath = disRoot + L"\\" + clsid;
+            for (HKEY hive : { HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER })
+                RegDeleteTreeW(hive, disPath.c_str());
+        }
+        return result_json(true, "ok");
     }
+
+    // 停用：删全部 hive 的 NameSpace\{clsid} 与 -NameSpace\{clsid}。
+    std::wstring enRoot = kNameSpacePath;
+    std::wstring disRoot = kNameSpacePath;
+    size_t pos = disRoot.rfind(L"NameSpace");
+    if (pos == std::wstring::npos) return result_json(false, "registry_failed");
+    disRoot.insert(pos, L"-");
+
+    bool deleted = false;
+    for (HKEY hive : { HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER }) {
+        LSTATUS st1 = RegDeleteTreeW(hive, (enRoot + L"\\" + clsid).c_str());
+        LSTATUS st2 = RegDeleteTreeW(hive, (disRoot + L"\\" + clsid).c_str());
+        if (st1 == ERROR_SUCCESS || st2 == ERROR_SUCCESS) deleted = true;
+    }
+    if (!deleted) {
+        // 已是停用态（键不存在）——幂等成功。
+        bool anywhere = false;
+        for (HKEY hive : { HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER }) {
+            HKEY h = nullptr;
+            if (RegOpenKeyExW(hive, (enRoot + L"\\" + clsid).c_str(), 0,
+                              KEY_READ, &h) == ERROR_SUCCESS) {
+                RegCloseKey(h);
+                anywhere = true;
+            }
+            if (RegOpenKeyExW(hive, (disRoot + L"\\" + clsid).c_str(), 0,
+                              KEY_READ, &h) == ERROR_SUCCESS) {
+                RegCloseKey(h);
+                anywhere = true;
+            }
+        }
+        return anywhere ? result_json(false, "registry_failed")
+                        : result_json(true, "already_done");
+    }
+    // 通知 shell 重新枚举（NameSpace 变更 explorer 不一定即时刷新）。
+    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
     return result_json(true, "ok");
 }
 

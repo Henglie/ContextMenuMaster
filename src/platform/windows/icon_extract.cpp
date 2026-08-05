@@ -264,7 +264,7 @@ bool extract_icon_to_file(const std::string& source, int px,
     std::vector<BYTE> png = source_to_png(source, px);
     if (png.empty()) return false;
 
-    // 宽字符打开，支持中文输出目录（对标全程宽字符约定）。
+    // 宽字符打开，支持中文输出目录。
     std::wstring wpath = utf8_to_wide(out_path);
     HANDLE h = CreateFileW(wpath.c_str(), GENERIC_WRITE, 0, nullptr,
                            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -274,6 +274,19 @@ bool extract_icon_to_file(const std::string& source, int px,
               && written == png.size();
     CloseHandle(h);
     return ok;
+}
+
+std::string extract_hicon_data_uri(HICON hIcon, int px) {
+    if (!hIcon || px <= 0 || px > 256) return "";
+    ensure_gdiplus();
+    Gdiplus::Bitmap* bmp = hicon_to_bitmap(hIcon, px);
+    if (!bmp) return "";
+    std::vector<BYTE> png = bitmap_to_png(bmp);
+    delete bmp;
+    if (png.empty()) return "";
+    std::string b64 = base64_encode(png.data(), (DWORD)png.size());
+    if (b64.empty()) return "";
+    return "data:image/png;base64," + b64;
 }
 
 }  // namespace cmm

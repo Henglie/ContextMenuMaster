@@ -6,7 +6,7 @@
 
 **在 Windows 11 上，把右键菜单重新交回你手里** · 液态玻璃界面 · 纯本地、可逆
 
-[![Release](https://img.shields.io/badge/release-v0.6-4d9fff?style=flat-square)](https://github.com/Henglie/ContextMenuMaster/releases)
+[![Release](https://img.shields.io/badge/release-v0.7-4d9fff?style=flat-square)](https://github.com/Henglie/ContextMenuMaster/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-6a5ae0?style=flat-square)](https://github.com/Henglie/ContextMenuMaster/releases)
 [![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 [![Arch](https://img.shields.io/badge/arch-x64%20%7C%20x86%20%7C%20arm64-f59e0b?style=flat-square)](https://github.com/Henglie/ContextMenuMaster/releases)
@@ -301,6 +301,6 @@ ContextMenuMaster/
 ## 许可与作者
 
 - **作者**：恒烈 (EternalBlaze / Henglie)
-- **版本**：v0.6
+- **版本**：v0.7
 - **项目主页**：<https://github.com/Henglie/ContextMenuMaster>
 - **协议**：MIT

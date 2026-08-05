@@ -301,6 +301,67 @@
   /* 特殊菜单场景（发送到/拖放/新建/打开方式）—— 扁平列表，复用 winx-item 视觉 */
   /* Special-menu scenes: flat list, reuse winx-item look. */
   .sp-list{ display:flex; flex-direction:column; gap:6px; }
+
+  /* —— 此电脑仿真（driveicons）：仿 Win11「设备和驱动器」短长方形组件 —— */
+  .pc-head{ display:flex; align-items:center; gap:8px; font-size:13px;
+    font-weight:600; color:var(--fg); padding:2px 2px 10px; }
+  .pc-head-2{ margin-top:20px; }
+  .pc-head .pc-chev{ font-size:10px; color:var(--fg-muted); }
+  .pc-strip{ display:flex; flex-wrap:wrap; gap:12px; align-items:stretch; }
+  /* 磁盘卡片：浅灰实底块级卡片（仿 Win11 设置存储卡），固定宽+长名截断 */
+  .pc-drive{ display:flex; align-items:center; gap:14px; padding:14px 18px;
+    width:320px; flex-shrink:0; border-radius:var(--radius-sm);
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
+    box-shadow:var(--inset-glass); }
+  .pc-drive:hover{ border-color:rgba(var(--glow-a),.5); }
+  .pc-drive-icon{ position:relative; width:46px; height:46px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:32px;
+    color:var(--fg-muted); }
+  .pc-drive-icon img{ width:46px; height:46px; object-fit:contain; }
+  /* 磁盘图标左上角的 Windows 小徽标（四格方块） */
+  .pc-win-badge{ position:absolute; top:-4px; inset-inline-start:-4px; width:15px;
+    height:15px; font-size:9px; line-height:15px; text-align:center;
+    color:#fff; background:linear-gradient(135deg,#4d9fff,#38c6da);
+    border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,.4); }
+  .pc-drive-meta{ flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+  .pc-drive-name{ font-size:13.5px; font-weight:600; color:var(--fg);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pc-drive-bar{ height:6px; border-radius:3px; background:rgba(255,255,255,.14);
+    overflow:hidden; }
+  .pc-bar-fill{ height:100%; border-radius:3px;
+    background:linear-gradient(90deg,rgba(var(--glow-a),.9),rgba(var(--glow-b),.85)); }
+  .pc-drive-nums{ font-size:11.5px; color:var(--fg-muted); }
+  /* 第三方应用单元：固定宽短长方形，长名截断 */
+  .pc-app{ display:flex; align-items:center; gap:12px; padding:12px 16px;
+    width:320px; flex-shrink:0; overflow:visible; border-radius:var(--radius-sm);
+    background:var(--glass-fill); border:1px solid var(--glass-stroke);
+    transition:border-color var(--dur-quick), background var(--dur-quick); }
+  .pc-app:hover{ border-color:rgba(var(--glow-a),.5); background:var(--glass-fill-strong); }
+  .pc-app.disabled{ opacity:.55; }
+  .pc-app-icon{ width:32px; height:32px; flex-shrink:0; display:flex;
+    align-items:center; justify-content:center; font-size:24px; color:var(--fg-muted); }
+  .pc-app-icon img{ width:32px; height:32px; object-fit:contain; }
+  .pc-app-meta{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; overflow:hidden; }
+  .pc-app-name{ font-size:13px; font-weight:600; color:var(--fg);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pc-app-name .sp-sys{ margin-inline-start:4px; font-size:9px; font-weight:600;
+    color:var(--accent-bright); background:var(--accent-soft); padding:1px 5px;
+    border-radius:6px; vertical-align:1px; }
+  .pc-app-sub{ font-size:11px; color:var(--fg-muted); font-weight:400;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pc-app-actions{ display:flex; align-items:center; gap:6px;
+    flex-shrink:0; }
+  .pc-app-actions .switch{ flex-shrink:0; }
+  .pc-app-actions .wi-del{ flex-shrink:0; display:inline-flex; align-items:center;
+    justify-content:center; border:none; outline:none; cursor:pointer;
+    padding:4px 10px; border-radius:6px; font-size:11px; font-weight:500;
+    background:rgba(255,255,255,.10); color:var(--fg-muted);
+    transition:background var(--dur-quick), color var(--dur-quick); }
+  .pc-app-actions .wi-del:hover{ background:var(--danger-soft); color:var(--danger); }
+  .pc-app:hover .pc-app-actions{ opacity:1; }
+  .pc-app:hover .pc-app-actions .wi-del{ opacity:1; }
+
+
   .sp-group-head{ font-size:12px; font-weight:600; color:var(--fg-dim); letter-spacing:.3px;
     margin:12px 2px 4px; }
   .sp-group-head:first-child{ margin-top:0; }
@@ -992,6 +1053,63 @@
         </div>
 
         <div v-else-if="isSpecialScene" class="sp-view">
+          <!-- 此电脑仿真：真实磁盘（图标+容量条）+ 第三方图标混合网格（仅 driveicons） -->
+          <template v-if="scene==='driveicons'">
+            <div class="slogan">{{ t('sp.'+scene+'_slogan') }}</div>
+
+            <div class="toolbar">
+              <div class="spacer"></div>
+              <button class="btn sm" @click="loadSpecial(scene, true)" :disabled="busy">
+                <span class="ic">↻</span>{{ t('winx.refresh') }}
+              </button>
+            </div>
+
+            <div v-if="spLoading" class="loading"><span class="spinner"></span>{{ t('winx.loading') }}</div>
+            <div v-else-if="!spItems.length" class="empty">{{ t('sp.'+scene+'_empty') }}</div>
+
+            <template v-else>
+              <!-- 仿 Win11「此电脑」：设备和驱动器（磁盘+第三方）+ 文件夹（系统内建）两组 -->
+              <div class="pc-head">
+                <span class="pc-chev">▾</span><span>{{ t('di.drive_section') }}</span>
+              </div>
+              <div class="pc-strip">
+                <!-- 磁盘卡片：左图标（真实系统图标 pre-rendered）+ 右名称/进度条/容量文本 -->
+                <div v-for="it in spItems.filter(x => x.kind==='drive')" :key="it.id" class="pc-drive">
+                  <div class="pc-drive-icon">
+                    <img v-if="it.iconData" :src="it.iconData" alt="" draggable="false" />
+                    <img v-else-if="it.icon" :src="it.icon" alt="" draggable="false" />
+                    <span v-else>💽</span>
+                    <span class="pc-win-badge">▦</span>
+                  </div>
+                  <div class="pc-drive-meta">
+                    <div class="pc-drive-name">{{ driveLabel(it) }}</div>
+                    <div class="pc-drive-bar"><div class="pc-bar-fill" :style="{width: drivePct(it) + '%'}"></div></div>
+                    <div class="pc-drive-nums">{{ t('di.drive_free_total', { free: fmtBytes(it.freeBytes), total: fmtBytes(it.totalBytes) }) }}</div>
+                  </div>
+                </div>
+                <!-- 第三方应用单元：彩色图标 + 两行文本 + 悬停操作（不拆分系统/第三方，只过滤未解析的数字名） -->
+                <div v-for="it in spItems.filter(x => x.kind==='ns' && !(x.label||'').startsWith('{'))" :key="it.id"
+                     class="pc-app" :class="{disabled: !it.enabled}">
+                  <div class="pc-app-icon">
+                    <img v-if="it.icon" :src="it.icon" alt="" draggable="false" />
+                    <span v-else>▣</span>
+                  </div>
+                  <div class="pc-app-meta">
+                    <div class="pc-app-name">{{ it.label }}<span v-if="it.system" class="sp-sys">{{ t('sp.sys') }}</span></div>
+                    <div class="pc-app-sub" :title="it.dllPath || it.id">{{ t('di.double_click', { name: it.label }) }}</div>
+                  </div>
+                  <div class="pc-app-actions">
+                    <span class="switch" :class="{on: it.enabled}" @click="spToggle(it)"><span class="knob"></span></span>
+                    <button class="wi-del" @click="spDel(it)" :disabled="busy" :title="t('winx.del')">
+                      <span class="ic">⌫</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </template>
+
+          <template v-else>
           <div class="slogan">{{ t('sp.'+scene+'_slogan') }}</div>
 
           <div class="toolbar">
@@ -1068,6 +1186,7 @@
                 </div>
               </template>
             </div>
+          </template>
           </template>
         </div>
 
@@ -2675,9 +2794,35 @@ const app = createApp({
         return it.label || it.id;
       }
       if (this.scene === 'driveicons') {
+        if (it.knownId) return this.t('di.known_' + it.knownId);
         return it.label || it.id;
       }
       return it.label || it.id;
+    },
+    // —— 此电脑仿真（driveicons 场景专属）——
+    // 磁盘类型名 i18n 映射（后端只给 type 枚举，中文拼装在前端）。
+    driveTypeName(it) {
+      return this.t('di.type_' + (it.type || 'fixed'));
+    },
+    // 磁盘卡片显示名：「本地磁盘 (C:)」/「可移动磁盘 (E:)」…
+    driveLabel(it) {
+      const letter = it.letter || it.label || '';
+      return this.driveTypeName(it) + ' (' + letter + ')';
+    },
+    // 容量条百分比（已用 / 总）。
+    drivePct(it) {
+      if (!it.totalBytes) return 0;
+      let p = (it.totalBytes - it.freeBytes) * 100 / it.totalBytes;
+      if (p < 0) p = 0;
+      if (p > 100) p = 100;
+      return p;
+    },
+    // 字节数人性化：GB / TB（≥1024 GB 进位）。
+    fmtBytes(b) {
+      if (!b || b <= 0) return '0 GB';
+      const gb = b / 1073741824;
+      if (gb >= 1024) return (gb / 1024).toFixed(1) + ' TB';
+      return gb.toFixed(1) + ' GB';
     },
     // 显示名：handler 项的 id 是 "handler:xxx"，label 是注册表键名（一般是 CLSID 或 DLL 名）。
     // 对 handler，去 "handler:" 前缀并截短显示。Win11 视图与列表视图都剥掉助记符。
